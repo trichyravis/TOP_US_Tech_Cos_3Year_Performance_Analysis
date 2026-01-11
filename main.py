@@ -785,16 +785,5 @@ with tab5:
 # FOOTER
 # ============================================================================
 
-st.markdown("---")
-
-# Simple minimal footer
-col1, col2, col3 = st.columns([1, 2, 1])
-
-with col2:
-    st.markdown("**Prof. V. Ravichandran**")
-    st.markdown("[LinkedIn](https://www.linkedin.com/in/trichyravis/) | [GitHub](https://github.com/trichyravis)")
-
-st.markdown("")
-
-# Disclaimer section
-st.warning("**DISCLAIMER**: This tool is for educational purposes only. NOT financial advice. Consult a qualified financial advisor before making investment decisions. Past performance does not guarantee future results. This tool does not include taxes, fees, or transaction costs.")
+from footer import render_footer
+render_footer()
