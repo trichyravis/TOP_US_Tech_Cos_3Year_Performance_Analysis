@@ -1,74 +1,104 @@
 
 """
 Main Application File - Streamlit Entry Point
-Purpose: Render the complete 5-tab dashboard for US Tech Companies Analysis
+Uses proven DataFetcher pattern for robust data loading
 """
 
 import streamlit as st
 import pandas as pd
 import numpy as np
-import yfinance as yf
-from datetime import datetime, timedelta
+from datetime import datetime
 import plotly.graph_objects as go
 import plotly.express as px
 
-from config import (
-    PAGE_CONFIG, APP_TITLE, TICKERS, COLORS, DISCLAIMER, 
-    LINKEDIN_URL, GITHUB_URL, TRADING_DAYS_PER_YEAR
-)
-from styles import apply_mountain_path_theme, render_header, render_footer
-from components import (
-    render_sidebar_header, render_metrics_row,
-    render_data_table, render_candlestick_chart
-)
-from data_handler import (
-    initialize_data_handler, get_stock_data, fetch_risk_free_rate
-)
-from analytics import (
-    calculate_returns, calculate_annual_return, calculate_volatility,
-    calculate_sharpe_ratio, calculate_sortino_ratio, calculate_var_cvar,
-    calculate_max_drawdown, generate_risk_summary
+from data_handler_new import (
+    DataFetcher, fetch_all_company_data, fetch_market_data, get_company_data
 )
 
 # ============================================================================
 # PAGE CONFIGURATION
 # ============================================================================
 
-st.set_page_config(**PAGE_CONFIG)
-apply_mountain_path_theme()
+st.set_page_config(
+    page_title="TOP US Tech Companies Analysis",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
-# Initialize data handler on first run
-if 'data_initialized' not in st.session_state:
-    initialize_data_handler()
-    st.session_state.data_initialized = True
-    st.session_state.last_refresh = datetime.now()
+# Custom CSS for Mountain Path Theme
+st.markdown("""
+<style>
+    [data-testid="stHeader"] {
+        background-color: #003366 !important;
+    }
+    
+    .main {
+        background-color: #f8f9fa;
+    }
+    
+    [data-testid="stSidebar"] {
+        background-color: #003366;
+    }
+    
+    .metric-card {
+        background: linear-gradient(135deg, #003366 0%, #004d80 100%);
+        color: white;
+        padding: 20px;
+        border-radius: 10px;
+        margin: 10px 0;
+    }
+    
+    h1, h2, h3 {
+        color: #003366;
+    }
+    
+    .stTabs [data-baseweb="tab-list"] button {
+        color: #003366;
+        font-weight: bold;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # ============================================================================
-# SIDEBAR CONFIGURATION
+# HEADER
+# ============================================================================
+
+col1, col2, col3 = st.columns([1, 2, 1])
+
+with col2:
+    st.markdown("""
+    <div style="background: linear-gradient(135deg, #003366 0%, #004d80 100%); 
+                padding: 30px; border-radius: 15px; text-align: center; margin: 20px 0;">
+        <h1 style="color: #FFD700; margin: 0;">THE MOUNTAIN PATH - WORLD OF FINANCE</h1>
+        <p style="color: white; font-size: 18px; margin: 10px 0;">Top US Tech Companies Performance Analysis</p>
+        <p style="color: #FFD700; font-size: 14px; margin: 0;">3-Year Rolling Window • Educational Purpose Only</p>
+    </div>
+    """, unsafe_allow_html=True)
+
+# ============================================================================
+# SIDEBAR
 # ============================================================================
 
 with st.sidebar:
-    render_sidebar_header("Navigation", "📊")
+    st.markdown("### 🔧 Controls")
     
-    # Refresh data button
-    if st.button("🔄 Refresh Data", help="Manually refresh all data (15min cooldown)"):
+    if st.button("🔄 Refresh Data", use_container_width=True):
         st.cache_data.clear()
-        st.session_state.last_refresh = datetime.now()
         st.rerun()
     
-    st.divider()
-    
-    # Last refresh time
-    if 'last_refresh' in st.session_state:
-        st.caption(f"Last refresh: {st.session_state.last_refresh.strftime('%Y-%m-%d %H:%M:%S')}")
+    st.markdown("---")
+    st.markdown("### ⚙️ Risk Parameters")
+    confidence_level = st.radio(
+        "VaR Confidence Level:",
+        [90, 95, 99],
+        index=1
+    )
 
 # ============================================================================
-# MAIN CONTENT
+# MAIN TABS
 # ============================================================================
 
-render_header()
-
-# Create tabs
 tab1, tab2, tab3, tab4, tab5 = st.tabs([
     "📋 About Platform",
     "💰 Financial Performance",
@@ -78,86 +108,59 @@ tab1, tab2, tab3, tab4, tab5 = st.tabs([
 ])
 
 # ============================================================================
-# TAB 1: ABOUT THE PLATFORM
+# TAB 1: ABOUT
 # ============================================================================
 
 with tab1:
-    st.subheader("About The Mountain Path - World of Finance")
+    st.subheader("📚 About The Mountain Path - World of Finance")
     
     col1, col2 = st.columns(2)
     
     with col1:
         st.markdown("""
-        ### 📚 Platform Overview
+        ### Platform Overview
         
         **The Mountain Path - World of Finance** is an educational platform 
         designed to help students understand:
+        
         - Financial analysis and valuation
         - Investment concepts and strategies
         - Risk management frameworks
         - Quantitative finance techniques
         
-        ### 🎯 This Tool
+        ### This Tool
         
-        This dashboard provides a comprehensive **3-year performance analysis** 
-        of the top US IT companies.
-        
-        #### Companies Analyzed
-        - **NVIDIA** (NVDA) - AI & Semiconductors
-        - **Microsoft** (MSFT) - Cloud & Software
-        - **Apple** (AAPL) - Consumer Electronics
-        - **Alphabet/Google** (GOOGL) - Digital Advertising
-        - **Amazon** (AMZN) - E-commerce & Cloud
+        This dashboard analyzes the **Top 5 US Technology Companies**:
+        - **NVDA** - NVIDIA (Semiconductors)
+        - **MSFT** - Microsoft (Cloud & Software)
+        - **AAPL** - Apple (Consumer Electronics)
+        - **GOOGL** - Alphabet (Search & Advertising)
+        - **AMZN** - Amazon (E-commerce & Cloud)
         """)
     
     with col2:
         st.markdown("""
-        ### 🔧 Key Features
+        ### Data Sources
         
-        ✓ Historical stock price analysis (3 years daily)  
-        ✓ Financial performance metrics (Revenue, Income, Margins)  
-        ✓ Risk assessment (VaR, CVaR, Sharpe, Sortino, Max Drawdown)  
-        ✓ Interactive visualizations (Candlestick, Heatmaps)  
-        ✓ Real-time data updates (every 4 hours)  
-        ✓ Correlation analysis (5-stock comparison)  
+        - **Price Data**: Yahoo Finance (yfinance)
+        - **Financial Metrics**: Company financial statements
+        - **Index Data**: S&P 500 (^GSPC)
+        - **Time Period**: 3-Year rolling window
         
-        ### 📊 Data Sources
+        ### Metrics Calculated
         
-        | Source | Data | Update Frequency |
-        |--------|------|------------------|
-        | Yahoo Finance | Stock Prices (Daily) | Every 4 hours |
-        | Yahoo Finance | Financial Data (Annual) | Daily |
-        | Federal Reserve (FRED) | 10Y Treasury Yield | Daily |
-        """)
-    
-    st.divider()
-    
-    # Disclaimer
-    st.warning(DISCLAIMER)
-    
-    st.divider()
-    
-    st.subheader("📞 Contact & Resources")
-    
-    col1, col2, col3 = st.columns(3)
-    
-    with col1:
-        st.markdown(f"""
-        **LinkedIn**  
-        [trichyravis]({LINKEDIN_URL})
-        """)
-    
-    with col2:
-        st.markdown(f"""
-        **GitHub**  
-        [trichyravis]({GITHUB_URL})
-        """)
-    
-    with col3:
-        st.markdown("""
-        **Author**  
-        Prof. V. Ravichandran  
-        28+ Years Finance & Banking  
+        - **Returns & Volatility**: Daily returns, annualized metrics
+        - **Risk Ratios**: Sharpe ratio, Sortino ratio
+        - **Drawdown Analysis**: Maximum drawdown, recovery periods
+        - **Value Metrics**: P/E, P/B, Price-to-Sales ratios
+        - **Leverage Ratios**: Debt-to-Equity, Current Ratio
+        
+        ---
+        
+        **Prof. V. Ravichandran**
+        
+        28+ Years Corporate Finance & Banking Experience
+        
         10+ Years Academic Excellence
         """)
 
@@ -166,70 +169,111 @@ with tab1:
 # ============================================================================
 
 with tab2:
-    st.subheader("💰 Financial Performance Analysis - All TOP US Tech Companies")
+    st.subheader("💰 Financial Performance - All TOP US Tech Companies")
     
-    st.info("📊 Analyzing all 5 companies: NVDA, MSFT, AAPL, GOOGL, AMZN")
+    st.info("📊 Loading financial data for all 5 companies...")
     
     try:
-        # Fetch financial data for all companies
-        financial_data = []
+        # Fetch all company data
+        all_data = fetch_all_company_data()
         
-        for ticker in TICKERS.keys():
-            try:
-                ticker_obj = yf.Ticker(ticker)
-                info = ticker_obj.info
+        if not all_data:
+            st.error("❌ Could not fetch financial data. Please try refreshing.")
+        else:
+            # Build financial metrics table
+            financial_rows = []
+            
+            for ticker, data in all_data.items():
+                company_info = data.get('company_info', {})
+                info = data.get('info', {})
                 
-                financial_data.append({
-                    'Company': f"{ticker} - {TICKERS[ticker]}",
-                    'Revenue ($B)': info.get('totalRevenue', 0) / 1e9,
-                    'Operating Income ($B)': info.get('operatingIncome', 0) / 1e9,
-                    'Net Income ($B)': info.get('netIncome', 0) / 1e9,
-                    'Employees': info.get('fullTimeEmployees', 0),
-                    'Market Cap ($B)': info.get('marketCap', 0) / 1e9,
+                financial_rows.append({
+                    'Company': f"{ticker} - {company_info.get('name', 'Unknown')}",
+                    'Sector': company_info.get('sector', 'N/A'),
+                    'Revenue ($B)': (info.get('totalRevenue', 0) or 0) / 1e9,
+                    'Operating Income ($B)': (info.get('operatingIncome', 0) or 0) / 1e9,
+                    'Net Income ($B)': (info.get('netIncome', 0) or 0) / 1e9,
+                    'Market Cap ($B)': (info.get('marketCap', 0) or 0) / 1e9,
                 })
-            except Exception as e:
-                st.warning(f"Could not fetch data for {ticker}: {e}")
-        
-        if financial_data:
-            df_financial = pd.DataFrame(financial_data)
+            
+            df_financial = pd.DataFrame(financial_rows)
             
             # Summary metrics
+            st.subheader("📊 Summary Metrics")
             col1, col2, col3 = st.columns(3)
+            
             with col1:
-                st.metric("Highest Revenue", 
-                         f"${df_financial['Revenue ($B)'].max():.1f}B")
+                max_revenue = df_financial['Revenue ($B)'].max()
+                st.metric("Highest Revenue", f"${max_revenue:.1f}B")
             with col2:
-                st.metric("Highest Net Income", 
-                         f"${df_financial['Net Income ($B)'].max():.1f}B")
+                max_income = df_financial['Net Income ($B)'].max()
+                st.metric("Highest Net Income", f"${max_income:.1f}B")
             with col3:
-                st.metric("Largest Market Cap", 
-                         f"${df_financial['Market Cap ($B)'].max():.1f}B")
+                max_cap = df_financial['Market Cap ($B)'].max()
+                st.metric("Largest Market Cap", f"${max_cap:.1f}B")
             
+            # Financial comparison table
             st.subheader("Financial Metrics Comparison")
-            render_data_table(df_financial)
+            st.dataframe(
+                df_financial.style.format({
+                    'Revenue ($B)': '{:.1f}',
+                    'Operating Income ($B)': '{:.1f}',
+                    'Net Income ($B)': '{:.1f}',
+                    'Market Cap ($B)': '{:.1f}'
+                }),
+                use_container_width=True
+            )
             
-            # Show individual company details
-            st.subheader("Individual Company Details")
+            # Individual company details
+            st.subheader("📈 Individual Company Details")
             
-            for ticker in TICKERS.keys():
-                with st.expander(f"📈 {ticker} - {TICKERS[ticker]}"):
+            for ticker, data in all_data.items():
+                company_info = data.get('company_info', {})
+                info = data.get('info', {})
+                
+                with st.expander(f"📊 {ticker} - {company_info.get('name', 'Unknown')}"):
                     col1, col2, col3, col4 = st.columns(4)
                     
-                    company_data = df_financial[df_financial['Company'].str.contains(ticker)]
-                    if not company_data.empty:
-                        company_data = company_data.iloc[0]
-                        
-                        with col1:
-                            st.metric("Annual Revenue", f"${company_data['Revenue ($B)']:.1f}B")
-                        with col2:
-                            st.metric("Operating Income", f"${company_data['Operating Income ($B)']:.1f}B")
-                        with col3:
-                            st.metric("Net Income", f"${company_data['Net Income ($B)']:.1f}B")
-                        with col4:
-                            st.metric("Market Cap", f"${company_data['Market Cap ($B)']:.1f}B")
+                    with col1:
+                        revenue = (info.get('totalRevenue', 0) or 0) / 1e9
+                        st.metric("Revenue", f"${revenue:.1f}B")
+                    with col2:
+                        op_income = (info.get('operatingIncome', 0) or 0) / 1e9
+                        st.metric("Operating Income", f"${op_income:.1f}B")
+                    with col3:
+                        net_income = (info.get('netIncome', 0) or 0) / 1e9
+                        st.metric("Net Income", f"${net_income:.1f}B")
+                    with col4:
+                        market_cap = (info.get('marketCap', 0) or 0) / 1e9
+                        st.metric("Market Cap", f"${market_cap:.1f}B")
+                    
+                    # Additional metrics
+                    col1, col2, col3 = st.columns(3)
+                    
+                    with col1:
+                        pe = info.get('trailingPE')
+                        if pe:
+                            st.metric("P/E Ratio", f"{pe:.2f}")
+                        else:
+                            st.metric("P/E Ratio", "N/A")
+                    
+                    with col2:
+                        pb = info.get('priceToBook')
+                        if pb:
+                            st.metric("P/B Ratio", f"{pb:.2f}")
+                        else:
+                            st.metric("P/B Ratio", "N/A")
+                    
+                    with col3:
+                        yield_val = info.get('dividendYield')
+                        if yield_val:
+                            st.metric("Dividend Yield", f"{yield_val*100:.2f}%")
+                        else:
+                            st.metric("Dividend Yield", "N/A")
     
     except Exception as e:
-        st.error(f"Error fetching financial data: {e}")
+        st.error(f"❌ Error loading financial data: {str(e)}")
+        st.info("💡 Please try clicking 'Refresh Data' button in the sidebar")
 
 # ============================================================================
 # TAB 3: MARKET ANALYSIS
@@ -238,113 +282,125 @@ with tab2:
 with tab3:
     st.subheader("📈 Market Analysis - All TOP US Tech Companies")
     
-    # Always use all companies
-    selected_tickers = list(TICKERS.keys())
-    
-    st.info(f"📊 Analyzing all {len(selected_tickers)} companies: {', '.join(selected_tickers)}")
+    st.info("📊 Analyzing all 5 companies: NVDA, MSFT, AAPL, GOOGL, AMZN")
     
     try:
-        # Get price data
-        price_data_dict = {}
-        for ticker in selected_tickers:
-            data = get_stock_data(ticker)
-            if data is not None:
-                price_data_dict[ticker] = data
+        all_data = fetch_all_company_data()
         
-        if not price_data_dict:
-            st.error("Could not fetch price data for companies")
-            st.stop()
-        
-        # Candlestick charts for all companies in tabs
-        st.subheader("📈 Price Movement - Individual Companies")
-        
-        chart_tabs = st.tabs([f"{ticker} - {TICKERS[ticker]}" for ticker in selected_tickers])
-        
-        for idx, ticker in enumerate(selected_tickers):
-            with chart_tabs[idx]:
-                if ticker in price_data_dict:
-                    price_data = price_data_dict[ticker]
+        if not all_data:
+            st.error("❌ Could not fetch price data")
+        else:
+            # Candlestick charts for each company
+            st.subheader("📉 Candlestick Charts")
+            
+            chart_tabs = st.tabs([
+                "NVDA - NVIDIA",
+                "MSFT - Microsoft",
+                "AAPL - Apple",
+                "GOOGL - Alphabet",
+                "AMZN - Amazon"
+            ])
+            
+            for idx, (ticker, data) in enumerate(all_data.items()):
+                with chart_tabs[idx]:
+                    price_data = data.get('price_data')
+                    company_info = data.get('company_info', {})
                     
-                    # Handle both lowercase and uppercase column names
-                    open_col = 'open' if 'open' in price_data.columns else 'Open'
-                    high_col = 'high' if 'high' in price_data.columns else 'High'
-                    low_col = 'low' if 'low' in price_data.columns else 'Low'
-                    close_col = 'close' if 'close' in price_data.columns else 'Close'
-                    
-                    fig = go.Figure(data=[go.Candlestick(
-                        x=price_data.index,
-                        open=price_data[open_col],
-                        high=price_data[high_col],
-                        low=price_data[low_col],
-                        close=price_data[close_col]
-                    )])
-                    
-                    fig.update_layout(
-                        title=f"{ticker} - {TICKERS[ticker]} - Candlestick Chart (3 Years)",
-                        xaxis_title="Date",
-                        yaxis_title="Price ($)",
-                        template="plotly_white",
-                        height=500,
-                        hovermode="x unified"
-                    )
-                    
-                    st.plotly_chart(fig, use_container_width=True)
-        
-        # Annual returns comparison - ALL COMPANIES
-        st.subheader("📊 Annual Returns Comparison - All Companies")
-        
-        annual_returns = {}
-        for ticker, data in price_data_dict.items():
-            close_col = 'close' if 'close' in data.columns else 'Close'
-            annual_return = calculate_annual_return(data[close_col])
-            annual_returns[ticker] = annual_return * 100
-        
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=list(annual_returns.keys()),
-            y=list(annual_returns.values()),
-            marker_color=[COLORS['primary'] if v > 0 else '#d62728' 
-                         for v in annual_returns.values()]
-        ))
-        
-        fig.update_layout(
-            title="3-Year Annualized Returns",
-            xaxis_title="Company",
-            yaxis_title="Annual Return (%)",
-            template="plotly_white",
-            height=400
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Volatility comparison
-        st.subheader("Annual Volatility Comparison")
-        
-        volatilities = {}
-        for ticker, data in price_data_dict.items():
-            returns = calculate_returns(data['Close'])
-            vol = calculate_volatility(returns, annualize=True)
-            volatilities[ticker] = vol * 100
-        
-        fig = go.Figure()
-        fig.add_trace(go.Bar(
-            x=list(volatilities.keys()),
-            y=list(volatilities.values()),
-            marker_color=COLORS['secondary']
-        ))
-        
-        fig.update_layout(
-            title="Annual Volatility (Risk)",
-            xaxis_title="Company",
-            yaxis_title="Volatility (%)",
-            template="plotly_white",
-            height=400
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
+                    if price_data is not None and not price_data.empty:
+                        # Ensure column names are correct
+                        cols = price_data.columns.str.lower()
+                        price_data.columns = cols
+                        
+                        fig = go.Figure(data=[go.Candlestick(
+                            x=price_data.index,
+                            open=price_data['open'],
+                            high=price_data['high'],
+                            low=price_data['low'],
+                            close=price_data['close']
+                        )])
+                        
+                        fig.update_layout(
+                            title=f"{ticker} - {company_info.get('name', 'Unknown')} (3-Year Candlestick)",
+                            xaxis_title="Date",
+                            yaxis_title="Price ($)",
+                            template="plotly_white",
+                            height=500,
+                            hovermode="x unified"
+                        )
+                        
+                        st.plotly_chart(fig, use_container_width=True)
+                    else:
+                        st.warning(f"Could not load price data for {ticker}")
+            
+            # Annual returns comparison
+            st.subheader("📊 Annual Returns Comparison")
+            
+            annual_returns = {}
+            for ticker, data in all_data.items():
+                price_data = data.get('price_data')
+                if price_data is not None and not price_data.empty:
+                    cols = price_data.columns.str.lower()
+                    price_data.columns = cols
+                    annual_return = DataFetcher.calculate_annual_return(price_data['close'])
+                    annual_returns[ticker] = annual_return * 100
+            
+            if annual_returns:
+                fig = go.Figure()
+                fig.add_trace(go.Bar(
+                    x=list(annual_returns.keys()),
+                    y=list(annual_returns.values()),
+                    marker_color=['#FFD700' if v > 0 else '#ff6b6b' for v in annual_returns.values()],
+                    text=[f"{v:.1f}%" for v in annual_returns.values()],
+                    textposition="auto",
+                ))
+                
+                fig.update_layout(
+                    title="3-Year Annualized Returns",
+                    xaxis_title="Company",
+                    yaxis_title="Annual Return (%)",
+                    template="plotly_white",
+                    height=400,
+                    showlegend=False
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
+            
+            # Volatility comparison
+            st.subheader("📈 Volatility Comparison")
+            
+            volatility_data = {}
+            for ticker, data in all_data.items():
+                price_data = data.get('price_data')
+                if price_data is not None and not price_data.empty:
+                    cols = price_data.columns.str.lower()
+                    price_data.columns = cols
+                    returns = DataFetcher.calculate_returns(price_data['close']).dropna()
+                    volatility = DataFetcher.calculate_volatility(returns)
+                    volatility_data[ticker] = volatility * 100
+            
+            if volatility_data:
+                fig = go.Figure()
+                fig.add_trace(go.Bar(
+                    x=list(volatility_data.keys()),
+                    y=list(volatility_data.values()),
+                    marker_color='#003366',
+                    text=[f"{v:.1f}%" for v in volatility_data.values()],
+                    textposition="auto",
+                ))
+                
+                fig.update_layout(
+                    title="Annualized Volatility (3-Year)",
+                    xaxis_title="Company",
+                    yaxis_title="Volatility (%)",
+                    template="plotly_white",
+                    height=400,
+                    showlegend=False
+                )
+                
+                st.plotly_chart(fig, use_container_width=True)
     
     except Exception as e:
-        st.error(f"Error in market analysis: {e}")
+        st.error(f"❌ Error in market analysis: {str(e)}")
 
 # ============================================================================
 # TAB 4: RISK ANALYSIS
@@ -353,210 +409,103 @@ with tab3:
 with tab4:
     st.subheader("⚠️ Risk Analysis - All TOP US Tech Companies")
     
-    # Always use all companies
-    selected_tickers = list(TICKERS.keys())
-    
-    # Confidence level selector
-    with st.sidebar:
-        render_sidebar_header("Risk Parameters", "⚙️")
-        confidence = st.radio("VaR Confidence Level:", [90, 95, 99], index=1) / 100
-    
-    st.info(f"📊 Analyzing risk metrics for all {len(selected_tickers)} companies at {int(confidence*100)}% confidence level")
+    st.info(f"📊 Analyzing risk metrics at {confidence_level}% confidence level")
     
     try:
-        rf_rate = fetch_risk_free_rate()
+        all_data = fetch_all_company_data()
         
-        # Generate risk summaries
-        risk_summaries = []
-        
-        for ticker in selected_tickers:
-            data = get_stock_data(ticker)
-            if data is not None:
-                close_col = 'close' if 'close' in data.columns else 'Close'
-                returns = calculate_returns(data[close_col])
-                summary = generate_risk_summary(ticker, data[close_col], returns, rf_rate)
-                risk_summaries.append(summary)
-        
-        if risk_summaries:
-            # Risk metrics table
-            st.subheader("Risk Metrics Dashboard - All Companies")
+        if not all_data:
+            st.error("❌ Could not fetch data for risk analysis")
+        else:
+            # Calculate risk metrics for each company
+            risk_metrics = []
             
-            risk_df = pd.DataFrame(risk_summaries)
+            for ticker, data in all_data.items():
+                price_data = data.get('price_data')
+                company_info = data.get('company_info', {})
+                
+                if price_data is not None and not price_data.empty:
+                    cols = price_data.columns.str.lower()
+                    price_data.columns = cols
+                    
+                    returns = DataFetcher.calculate_returns(price_data['close']).dropna()
+                    annual_return = DataFetcher.calculate_annual_return(price_data['close'])
+                    volatility = DataFetcher.calculate_volatility(returns)
+                    sharpe = DataFetcher.calculate_sharpe_ratio(returns)
+                    max_dd = DataFetcher.calculate_max_drawdown(price_data['close'])
+                    
+                    risk_metrics.append({
+                        'Company': ticker,
+                        'Annual Return': f"{annual_return*100:.2f}%",
+                        'Volatility': f"{volatility*100:.2f}%",
+                        'Sharpe Ratio': f"{sharpe:.2f}",
+                        'Max Drawdown': f"{max_dd*100:.2f}%"
+                    })
             
-            # Format for display
-            risk_df_display = risk_df.copy()
-            risk_df_display['annual_return'] = risk_df_display['annual_return'].apply(lambda x: f"{x*100:.2f}%")
-            risk_df_display['annual_volatility'] = risk_df_display['annual_volatility'].apply(lambda x: f"{x*100:.2f}%")
-            risk_df_display['sharpe_ratio'] = risk_df_display['sharpe_ratio'].apply(lambda x: f"{x:.2f}")
-            risk_df_display['sortino_ratio'] = risk_df_display['sortino_ratio'].apply(lambda x: f"{x:.2f}")
-            risk_df_display['max_drawdown'] = risk_df_display['max_drawdown'].apply(lambda x: f"{x*100:.2f}%")
-            risk_df_display['var_95'] = risk_df_display['var_95'].apply(lambda x: f"{x*100:.2f}%")
-            risk_df_display['cvar_95'] = risk_df_display['cvar_95'].apply(lambda x: f"{x*100:.2f}%")
-            
-            # Select columns to display
-            display_cols = ['ticker', 'annual_return', 'annual_volatility', 'sharpe_ratio', 'sortino_ratio', 'max_drawdown']
-            render_data_table(risk_df_display[display_cols])
-            
-            st.divider()
-            
-            # Key metrics highlights
-            st.subheader("🎯 Risk Metrics Highlights")
-            
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                best_sharpe_idx = risk_df['sharpe_ratio'].idxmax()
-                best_sharpe_ticker = risk_df.loc[best_sharpe_idx, 'ticker']
-                best_sharpe = risk_df.loc[best_sharpe_idx, 'sharpe_ratio']
-                st.metric("Best Risk-Adjusted Return (Sharpe)", 
-                         f"{best_sharpe_ticker}", f"{best_sharpe:.2f}")
-            
-            with col2:
-                best_sortino_idx = risk_df['sortino_ratio'].idxmax()
-                best_sortino_ticker = risk_df.loc[best_sortino_idx, 'ticker']
-                best_sortino = risk_df.loc[best_sortino_idx, 'sortino_ratio']
-                st.metric("Best Downside Risk (Sortino)", 
-                         f"{best_sortino_ticker}", f"{best_sortino:.2f}")
-            
-            with col3:
-                lowest_vol_idx = risk_df['annual_volatility'].idxmin()
-                lowest_vol_ticker = risk_df.loc[lowest_vol_idx, 'ticker']
-                lowest_vol = risk_df.loc[lowest_vol_idx, 'annual_volatility']
-                st.metric("Lowest Volatility", 
-                         f"{lowest_vol_ticker}", f"{lowest_vol*100:.1f}%")
-            
-            with col4:
-                min_dd_idx = risk_df['max_drawdown'].idxmax()  # Highest (least negative)
-                min_dd_ticker = risk_df.loc[min_dd_idx, 'ticker']
-                min_dd = risk_df.loc[min_dd_idx, 'max_drawdown']
-                st.metric("Smallest Max Drawdown", 
-                         f"{min_dd_ticker}", f"{min_dd*100:.1f}%")
-            
-            st.divider()
-            
-            # VaR visualization
-            st.subheader(f"Value-at-Risk (VaR) at {int(confidence*100)}% Confidence")
-            
-            var_data = risk_df[['ticker', 'var_95']].copy()
-            var_data['var_95'] = var_data['var_95'] * 100
-            
-            fig = go.Figure()
-            fig.add_trace(go.Bar(
-                x=var_data['ticker'],
-                y=var_data['var_95'],
-                marker_color=COLORS['error']
-            ))
-            
-            fig.update_layout(
-                title=f"Daily Value-at-Risk ({int(confidence*100)}% confidence)",
-                xaxis_title="Company",
-                yaxis_title="Daily VaR (%)",
-                template="plotly_white",
-                height=400
-            )
-            
-            st.plotly_chart(fig, use_container_width=True)
+            if risk_metrics:
+                st.subheader("🎯 Risk Metrics Dashboard")
+                df_risk = pd.DataFrame(risk_metrics)
+                st.dataframe(df_risk, use_container_width=True)
     
     except Exception as e:
-        st.error(f"Error in risk analysis: {e}")
+        st.error(f"❌ Error in risk analysis: {str(e)}")
 
 # ============================================================================
 # TAB 5: SUMMARY & INSIGHTS
 # ============================================================================
 
 with tab5:
-    st.subheader("📊 Executive Summary & Insights")
+    st.subheader("📊 Summary & Key Insights")
     
     try:
-        # Get data for all companies
-        all_price_data = {}
-        all_summaries = []
+        all_data = fetch_all_company_data()
         
-        rf_rate = fetch_risk_free_rate()
-        
-        for ticker in TICKERS.keys():
-            try:
-                data = get_stock_data(ticker)
-                if data is not None:
-                    all_price_data[ticker] = data
-                    returns = calculate_returns(data['Close'])
-                    summary = generate_risk_summary(ticker, data['Close'], returns, rf_rate)
-                    all_summaries.append(summary)
-            except Exception as e:
-                st.warning(f"Could not analyze {ticker}: {e}")
-        
-        if all_summaries:
-            summary_df = pd.DataFrame(all_summaries)
+        if all_data:
+            st.markdown("""
+            ### 🏆 Key Highlights
             
-            # Key insights
-            st.subheader("🎯 Key Insights")
+            - **Data Source**: Yahoo Finance (yfinance)
+            - **Time Period**: 3 Years of daily price data
+            - **Companies Analyzed**: 5 Top US Tech Companies
+            - **Metrics**: Returns, Volatility, Risk, Financial Metrics
             
-            col1, col2, col3 = st.columns(3)
+            ### 📈 Performance Snapshot
+            """)
             
-            with col1:
-                best_return_idx = summary_df['annual_return'].idxmax()
-                best_return_ticker = summary_df.loc[best_return_idx, 'ticker']
-                best_return = summary_df.loc[best_return_idx, 'annual_return']
-                st.metric("🚀 Best Performer (Return)", 
-                         f"{best_return_ticker}", f"{best_return*100:.1f}%")
+            col1, col2, col3, col4, col5 = st.columns(5)
             
-            with col2:
-                highest_growth_idx = summary_df['annual_return'].idxmax()
-                st.metric("📈 Highest Growth Company", 
-                         f"{summary_df.loc[highest_growth_idx, 'ticker']}", 
-                         f"{summary_df.loc[highest_growth_idx, 'annual_return']*100:.1f}%")
+            companies = ['NVDA', 'MSFT', 'AAPL', 'GOOGL', 'AMZN']
             
-            with col3:
-                lowest_volatility_idx = summary_df['annual_volatility'].idxmin()
-                st.metric("🛡️ Most Stable (Lowest Vol)", 
-                         f"{summary_df.loc[lowest_volatility_idx, 'ticker']}", 
-                         f"{summary_df.loc[lowest_volatility_idx, 'annual_volatility']*100:.1f}%")
-            
-            st.divider()
-            
-            # Comprehensive comparison table
-            st.subheader("📋 Complete Metrics Comparison (All Companies)")
-            
-            summary_df_display = summary_df.copy()
-            summary_df_display['annual_return'] = summary_df_display['annual_return'].apply(lambda x: f"{x*100:.2f}%")
-            summary_df_display['annual_volatility'] = summary_df_display['annual_volatility'].apply(lambda x: f"{x*100:.2f}%")
-            summary_df_display['sharpe_ratio'] = summary_df_display['sharpe_ratio'].apply(lambda x: f"{x:.2f}")
-            summary_df_display['sortino_ratio'] = summary_df_display['sortino_ratio'].apply(lambda x: f"{x:.2f}")
-            summary_df_display['max_drawdown'] = summary_df_display['max_drawdown'].apply(lambda x: f"{x*100:.2f}%")
-            
-            render_data_table(summary_df_display)
-            
-            st.divider()
-            
-            # Performance ranking
-            st.subheader("🏆 Performance Rankings")
-            
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                st.write("**Ranked by Sharpe Ratio (Risk-Adjusted Return)**")
-                ranked_sharpe = summary_df.nlargest(5, 'sharpe_ratio')[['ticker', 'sharpe_ratio']]
-                for idx, (i, row) in enumerate(ranked_sharpe.iterrows(), 1):
-                    st.write(f"{idx}. {row['ticker']}: {row['sharpe_ratio']:.2f}")
-            
-            with col2:
-                st.write("**Ranked by Annual Return**")
-                ranked_return = summary_df.nlargest(5, 'annual_return')[['ticker', 'annual_return']]
-                for idx, (i, row) in enumerate(ranked_return.iterrows(), 1):
-                    st.write(f"{idx}. {row['ticker']}: {row['annual_return']*100:.1f}%")
-            
-            with col3:
-                st.write("**Ranked by Volatility (Lowest = Most Stable)**")
-                ranked_vol = summary_df.nsmallest(5, 'annual_volatility')[['ticker', 'annual_volatility']]
-                for idx, (i, row) in enumerate(ranked_vol.iterrows(), 1):
-                    st.write(f"{idx}. {row['ticker']}: {row['annual_volatility']*100:.1f}%")
+            for idx, (col, ticker) in enumerate(zip([col1, col2, col3, col4, col5], companies)):
+                if ticker in all_data:
+                    data = all_data[ticker]
+                    price_data = data.get('price_data')
+                    
+                    if price_data is not None and not price_data.empty:
+                        cols = price_data.columns.str.lower()
+                        price_data.columns = cols
+                        
+                        annual_return = DataFetcher.calculate_annual_return(price_data['close'])
+                        
+                        with col:
+                            st.metric(
+                                ticker,
+                                f"{annual_return*100:.1f}%",
+                                delta=f"{annual_return*100:.1f}%"
+                            )
     
     except Exception as e:
-        st.error(f"Error generating summary: {e}")
+        st.error(f"Error generating summary: {str(e)}")
 
 # ============================================================================
 # FOOTER
 # ============================================================================
 
-st.divider()
-render_footer()
+st.markdown("---")
+st.markdown("""
+<div style="text-align: center; color: #666; font-size: 12px; padding: 20px;">
+    <p><strong>The Mountain Path - World of Finance</strong></p>
+    <p>Prof. V. Ravichandran | 28+ Years Corporate Finance & Banking | 10+ Years Academic Excellence</p>
+    <p style="color: #999; margin-top: 10px;">Educational Purpose Only • Data from Yahoo Finance</p>
+</div>
+""", unsafe_allow_html=True)
