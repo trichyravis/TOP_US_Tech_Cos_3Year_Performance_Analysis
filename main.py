@@ -86,14 +86,6 @@ with st.sidebar:
     if st.button("🔄 Refresh Data", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
-    
-    st.markdown("---")
-    st.markdown("### ⚙️ Risk Parameters")
-    confidence_level = st.radio(
-        "VaR Confidence Level:",
-        [90, 95, 99],
-        index=1
-    )
 
 # ============================================================================
 # MAIN TABS
@@ -470,16 +462,31 @@ with tab3:
 with tab4:
     st.subheader("⚠️ Risk Analysis - All TOP US Tech Companies")
     
+    # Risk Parameters in Sidebar
+    with st.sidebar:
+        st.markdown("---")
+        st.markdown("### ⚙️ Risk Parameters")
+        confidence_level = st.radio(
+            "VaR Confidence Level:",
+            [90, 95, 99],
+            index=1,
+            key="risk_confidence"
+        )
+    
+    confidence_decimal = confidence_level / 100.0
     st.info(f"📊 Analyzing risk metrics at {confidence_level}% confidence level")
     
     try:
+        from risk_analyzer import RiskAnalyzer
+        
         all_data = fetch_all_company_data()
         
         if not all_data:
             st.error("❌ Could not fetch data for risk analysis")
         else:
-            # Calculate risk metrics for each company
-            risk_metrics = []
+            # Calculate comprehensive risk metrics
+            risk_data = []
+            detailed_risk = {}
             
             for ticker, data in all_data.items():
                 price_data = data.get('price_data')
@@ -491,25 +498,159 @@ with tab4:
                     
                     returns = DataFetcher.calculate_returns(price_data['close']).dropna()
                     annual_return = DataFetcher.calculate_annual_return(price_data['close'])
-                    volatility = DataFetcher.calculate_volatility(returns)
-                    sharpe = DataFetcher.calculate_sharpe_ratio(returns)
-                    max_dd = DataFetcher.calculate_max_drawdown(price_data['close'])
                     
-                    risk_metrics.append({
+                    # Calculate all risk metrics
+                    risk_metrics = RiskAnalyzer.generate_risk_metrics_dict(
+                        returns, 
+                        annual_return,
+                        [0.90, 0.95, 0.99]
+                    )
+                    
+                    # Store for display
+                    risk_data.append({
                         'Company': ticker,
                         'Annual Return': f"{annual_return*100:.2f}%",
-                        'Volatility': f"{volatility*100:.2f}%",
-                        'Sharpe Ratio': f"{sharpe:.2f}",
-                        'Max Drawdown': f"{max_dd*100:.2f}%"
+                        'Volatility': f"{risk_metrics['volatility']*100:.2f}%",
+                        'Sharpe Ratio': f"{risk_metrics['sharpe_ratio']:.2f}",
+                        'Sortino Ratio': f"{risk_metrics['sortino_ratio']:.2f}",
+                        'VAR 95%': f"{risk_metrics['var_95']*100:.2f}%",
+                        'CVAR 95%': f"{risk_metrics['cvar_95']*100:.2f}%",
+                        'Risk Assessment': risk_metrics['risk_assessment']
                     })
+                    
+                    detailed_risk[ticker] = {
+                        'metrics': risk_metrics,
+                        'company_info': company_info,
+                        'returns': returns
+                    }
             
-            if risk_metrics:
+            if risk_data:
+                # Risk Metrics Dashboard
                 st.subheader("🎯 Risk Metrics Dashboard")
-                df_risk = pd.DataFrame(risk_metrics)
-                st.dataframe(df_risk, use_container_width=True)
+                df_risk = pd.DataFrame(risk_data)
+                st.dataframe(df_risk, use_container_width=True, hide_index=True)
+                
+                st.divider()
+                
+                # VAR/CVAR Analysis by Confidence Level
+                st.subheader(f"📊 VAR & CVAR Analysis at {confidence_level}% Confidence")
+                
+                var_col_name = f'var_{confidence_level}'
+                cvar_col_name = f'cvar_{confidence_level}'
+                
+                var_data = {}
+                cvar_data = {}
+                
+                for ticker, data in detailed_risk.items():
+                    metrics = data['metrics']
+                    var_data[ticker] = metrics.get(var_col_name, 0) * 100
+                    cvar_data[ticker] = metrics.get(cvar_col_name, 0) * 100
+                
+                # VAR Chart
+                col1, col2 = st.columns(2)
+                
+                with col1:
+                    st.markdown(f"**Value at Risk (VAR) - {confidence_level}% Confidence**")
+                    fig_var = go.Figure()
+                    fig_var.add_trace(go.Bar(
+                        x=list(var_data.keys()),
+                        y=list(var_data.values()),
+                        marker_color='#ff6b6b',
+                        text=[f"{v:.2f}%" for v in var_data.values()],
+                        textposition="auto",
+                    ))
+                    fig_var.update_layout(
+                        title=f"Maximum {confidence_level}% Daily Loss",
+                        xaxis_title="Company",
+                        yaxis_title="VAR (%)",
+                        template="plotly_white",
+                        height=400,
+                        showlegend=False
+                    )
+                    st.plotly_chart(fig_var, use_container_width=True)
+                
+                with col2:
+                    st.markdown(f"**Conditional VAR (CVAR) - {confidence_level}% Confidence**")
+                    fig_cvar = go.Figure()
+                    fig_cvar.add_trace(go.Bar(
+                        x=list(cvar_data.keys()),
+                        y=list(cvar_data.values()),
+                        marker_color='#ff4444',
+                        text=[f"{v:.2f}%" for v in cvar_data.values()],
+                        textposition="auto",
+                    ))
+                    fig_cvar.update_layout(
+                        title=f"Expected Shortfall Beyond {confidence_level}%",
+                        xaxis_title="Company",
+                        yaxis_title="CVAR (%)",
+                        template="plotly_white",
+                        height=400,
+                        showlegend=False
+                    )
+                    st.plotly_chart(fig_cvar, use_container_width=True)
+                
+                st.divider()
+                
+                # Detailed Risk Analysis by Company
+                st.subheader("📈 Detailed Risk Analysis by Company")
+                
+                for ticker, data in detailed_risk.items():
+                    company_info = data['company_info']
+                    metrics = data['metrics']
+                    
+                    with st.expander(f"📊 {ticker} - {company_info.get('name', 'Unknown')} | {metrics['risk_assessment']}"):
+                        col1, col2, col3, col4 = st.columns(4)
+                        
+                        with col1:
+                            st.metric("Annual Return", f"{metrics['annual_return']*100:.2f}%")
+                        with col2:
+                            st.metric("Volatility", f"{metrics['volatility']*100:.2f}%")
+                        with col3:
+                            st.metric("Sharpe Ratio", f"{metrics['sharpe_ratio']:.2f}")
+                        with col4:
+                            st.metric("Sortino Ratio", f"{metrics['sortino_ratio']:.2f}")
+                        
+                        st.divider()
+                        
+                        st.markdown("**Value at Risk (VAR) Analysis**")
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            var_90 = metrics.get('var_90', 0) * 100
+                            st.metric("VAR 90%", f"{var_90:.2f}%")
+                        with col2:
+                            var_95 = metrics.get('var_95', 0) * 100
+                            st.metric("VAR 95%", f"{var_95:.2f}%")
+                        with col3:
+                            var_99 = metrics.get('var_99', 0) * 100
+                            st.metric("VAR 99%", f"{var_99:.2f}%")
+                        
+                        st.markdown("**Conditional Value at Risk (CVAR) Analysis**")
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            cvar_90 = metrics.get('cvar_90', 0) * 100
+                            st.metric("CVAR 90%", f"{cvar_90:.2f}%")
+                        with col2:
+                            cvar_95 = metrics.get('cvar_95', 0) * 100
+                            st.metric("CVAR 95%", f"{cvar_95:.2f}%")
+                        with col3:
+                            cvar_99 = metrics.get('cvar_99', 0) * 100
+                            st.metric("CVAR 99%", f"{cvar_99:.2f}%")
+                        
+                        st.divider()
+                        
+                        st.markdown(f"**Risk Assessment: {metrics['risk_assessment']}**")
+                        st.markdown("""
+                        **Interpretation:**
+                        - **VAR**: Maximum expected loss with (1-confidence)% probability
+                        - **CVAR**: Expected loss if VAR threshold is breached
+                        - **Higher confidence** = More conservative estimate
+                        """)
     
     except Exception as e:
         st.error(f"❌ Error in risk analysis: {str(e)}")
+        st.info("💡 Please try clicking 'Refresh Data' button in the sidebar")
 
 # ============================================================================
 # TAB 5: SUMMARY & INSIGHTS
