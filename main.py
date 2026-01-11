@@ -792,17 +792,13 @@ col1, col2, col3 = st.columns([1, 2, 1])
 
 with col2:
     st.markdown("""
-    <div style="text-align: center;">
-        <p style="color: #FFD700; font-size: 16px; font-weight: bold; margin: 10px 0;">
-            THE MOUNTAIN PATH - WORLD OF FINANCE
-        </p>
-        <p style="color: white; font-size: 13px; margin: 5px 0;">
-            <strong>Prof. V. Ravichandran</strong>
-        </p>
-        <p style="color: #FFD700; font-size: 11px; margin: 0 0 15px 0;">
+    <div style="text-align: center; padding: 10px;">
+        <h3 style="color: #FFD700; margin: 10px 0;">THE MOUNTAIN PATH - WORLD OF FINANCE</h3>
+        <p style="color: white; margin: 5px 0;"><b>Prof. V. Ravichandran</b></p>
+        <p style="color: #FFD700; margin: 0 0 15px 0; font-size: 13px;">
             28+ Years Corporate Finance & Banking | 10+ Years Academic Excellence
         </p>
-        <p style="color: white; font-size: 11px; margin: 10px 0;">
+        <p style="color: white; margin: 10px 0; font-size: 12px;">
             <a href="https://www.linkedin.com/in/trichyravis/" target="_blank" style="color: #FFD700; text-decoration: none; font-weight: bold;">LinkedIn</a>
             &nbsp;|&nbsp;
             <a href="https://github.com/trichyravis" target="_blank" style="color: #FFD700; text-decoration: none; font-weight: bold;">GitHub</a>
@@ -810,13 +806,11 @@ with col2:
     </div>
     """, unsafe_allow_html=True)
 
-# Disclaimer section with bright blue background
+# Disclaimer section with full width
 st.markdown("""
-<div style="background: #1E5A96; border-left: 4px solid #FFD700; padding: 15px; margin: 20px 0; border-radius: 5px;">
-    <p style="color: #FFD700; font-weight: bold; margin: 0 0 8px 0; font-size: 12px;">
-        DISCLAIMER
-    </p>
-    <p style="color: white; font-size: 11px; margin: 0; line-height: 1.6;">
+<div style="background-color: #1E5A96 !important; border-left: 5px solid #FFD700; padding: 20px; margin: 20px 0; border-radius: 5px;">
+    <h4 style="color: #FFD700 !important; margin: 0 0 10px 0; font-weight: bold;">DISCLAIMER</h4>
+    <p style="color: white !important; font-size: 12px; margin: 0; line-height: 1.8;">
         This tool is for <strong>educational purposes only</strong>. <strong>NOT financial advice</strong>. Always consult with a qualified financial advisor before making investment decisions. Past performance does not guarantee future results. This tool does not include taxes, fees, or transaction costs.
     </p>
 </div>
@@ -824,7 +818,9 @@ st.markdown("""
 
 # Copyright
 st.markdown("""
-<p style="text-align: center; color: #FFD700; font-size: 10px; margin: 20px 0 0 0;">
-    © 2024 The Mountain Path - World of Finance. All rights reserved.
-</p>
+<div style="text-align: center; margin: 20px 0;">
+    <p style="color: #FFD700 !important; font-size: 11px; margin: 0;">
+        © 2024 The Mountain Path - World of Finance. All rights reserved.
+    </p>
+</div>
 """, unsafe_allow_html=True)
