@@ -230,49 +230,6 @@ with tab2:
     
     except Exception as e:
         st.error(f"Error fetching financial data: {e}")
-            
-            if price_data is not None and len(price_data) > 0:
-                # Calculate margins
-                profit_margin = (net_income / revenue * 100) if revenue > 0 else 0
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Profit Margin", f"{profit_margin:.1f}%")
-                with col2:
-                    st.metric("Operating Margin", 
-                             f"{(op_income/revenue*100):.1f}%" if revenue > 0 else "N/A")
-                with col3:
-                    st.metric("Employees", f"{info.get('fullTimeEmployees', 0):,.0f}")
-                
-                st.divider()
-                
-                # Price trend
-                st.subheader("Stock Price Trend (3 Years)")
-                fig = go.Figure()
-                
-                fig.add_trace(go.Scatter(
-                    x=price_data.index,
-                    y=price_data['Close'],
-                    mode='lines',
-                    name='Close Price',
-                    line=dict(color=COLORS['primary'], width=2)
-                ))
-                
-                fig.update_layout(
-                    title=f"{selected_ticker} Price Trend",
-                    xaxis_title="Date",
-                    yaxis_title="Price ($)",
-                    template="plotly_white",
-                    height=400,
-                    hovermode="x unified"
-                )
-                
-                st.plotly_chart(fig, use_container_width=True)
-            else:
-                st.warning(f"Could not fetch price data for {selected_ticker}")
-        
-        except Exception as e:
-            st.error(f"Error fetching data for {selected_ticker}: {e}")
 
 # ============================================================================
 # TAB 3: MARKET ANALYSIS
