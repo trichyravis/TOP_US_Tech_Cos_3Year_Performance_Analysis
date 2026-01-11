@@ -212,43 +212,7 @@ with tab2:
     st.markdown("""
     ### 📊 Five-Lens Financial Framework Analysis
     
-    This comprehensive analysis evaluates each company across 5 critical dimensions:
-    
-    **1. Valuation Lens (20% weight)**
-    - P/E Ratio: Price relative to earnings
-    - P/B Ratio: Price relative to book value
-    - P/S Ratio: Price relative to sales
-    - Dividend Yield: Annual dividend return
-    
-    **2. Quality Lens (25% weight)**
-    - ROE (Return on Equity): Profitability for shareholders
-    - Net Profit Margin: Operational efficiency
-    - ROIC (Return on Invested Capital): Capital effectiveness
-    - ROA (Return on Assets): Asset utilization
-    
-    **3. Growth Lens (20% weight)**
-    - Revenue Growth YoY: Sales expansion
-    - Earnings Growth YoY: Profit expansion
-    - PEG Ratio: Growth-adjusted valuation
-    
-    **4. Financial Health Lens (20% weight)**
-    - Debt-to-Equity Ratio: Leverage levels
-    - Current Ratio: Short-term solvency
-    - Interest Coverage: Debt servicing ability
-    - Free Cash Flow: Cash generation
-    
-    **5. Risk & Momentum Lens (15% weight)**
-    - Beta: Systematic risk vs market
-    - Volatility: Price fluctuation
-    - Sharpe Ratio: Risk-adjusted returns
-    - 52-Week Price Momentum: Recent performance
-    
-    **Composite Score (0-100):**
-    - 85+: 🚀 Strong Buy
-    - 75-84: ✅ Buy
-    - 65-74: 🟡 Hold/Accumulate
-    - 50-64: ⚠️ Watch
-    - <50: 🔴 Avoid
+    This comprehensive analysis evaluates each company across 5 critical dimensions...
     """)
     
     st.info("📊 Analyzing all 5 companies using Five-Lens Framework...")
@@ -270,38 +234,38 @@ with tab2:
             detailed_scores = {}
             
             for ticker, data in all_data.items():
-                company_info = data.get('company_info', {})
-                price_data = data.get('price_data')
-                
-                # Get company name
-                company_name = company_info.get('longName', company_info.get('shortName', 'Unknown'))
-                
-                # Initialize with defaults
-                stock_data_eval = {
-                    'pe_ratio': 20.0,  # Default reasonable P/E
-                    'pb_ratio': 3.0,   # Default reasonable P/B
-                    'ps_ratio': 2.0,   # Default reasonable P/S
-                    'dividend_yield': 0.02,  # Default 2%
-                    'sector': company_info.get('sector', 'Technology'),
-                    'price_momentum_52w': 0.25,  # Default 25% growth
-                }
-                
-                financial_metrics_eval = {
-                    'roe': 0.20,  # Default 20% ROE (good)
-                    'npm': 0.15,  # Default 15% net margin
-                    'roa': 0.10,  # Default 10% ROA
-                    'roic': 0.15,  # Default 15% ROIC
-                    'debt_to_equity': 0.5,  # Default 0.5
-                    'current_ratio': 2.0,  # Default 2.0
-                    'interest_coverage': 10.0,  # Default 10x
-                    'free_cash_flow': 1000000000,  # Default 1B
-                    'revenue_growth_yoy': 0.10,  # Default 10%
-                    'earnings_growth_yoy': 0.15,  # Default 15%
-                    'peg_ratio': 1.0,  # Default 1.0
-                }
-                
-                # Try to get actual values from company_info
                 try:
+                    company_info = data.get('company_info', {})
+                    price_data = data.get('price_data')
+                    
+                    # Get company name
+                    company_name = company_info.get('longName', company_info.get('shortName', 'Unknown'))
+                    
+                    # Initialize with defaults
+                    stock_data_eval = {
+                        'pe_ratio': 20.0,
+                        'pb_ratio': 3.0,
+                        'ps_ratio': 2.0,
+                        'dividend_yield': 0.02,
+                        'sector': company_info.get('sector', 'Technology'),
+                        'price_momentum_52w': 0.25,
+                    }
+                    
+                    financial_metrics_eval = {
+                        'roe': 0.20,
+                        'npm': 0.15,
+                        'roa': 0.10,
+                        'roic': 0.15,
+                        'debt_to_equity': 0.5,
+                        'current_ratio': 2.0,
+                        'interest_coverage': 10.0,
+                        'free_cash_flow': 1000000000,
+                        'revenue_growth_yoy': 0.10,
+                        'earnings_growth_yoy': 0.15,
+                        'peg_ratio': 1.0,
+                    }
+                    
+                    # Try to get actual values from company_info
                     if 'trailingPE' in company_info:
                         stock_data_eval['pe_ratio'] = company_info['trailingPE']
                     if 'priceToBook' in company_info:
@@ -325,166 +289,128 @@ with tab2:
                         financial_metrics_eval['current_ratio'] = company_info['currentRatio']
                     if 'revenueGrowth' in company_info:
                         financial_metrics_eval['revenue_growth_yoy'] = company_info['revenueGrowth']
-                except:
-                    pass  # Use defaults if extraction fails
-                
-                # Prepare risk metrics - will be calculated from price data
-                risk_metrics_eval = {
-                    'beta': 1.2,  # Default for tech stocks
-                    'volatility_252d': 0.25,  # Default
-                    'sharpe_ratio': 0.8,  # Default
-                }
-                
-                # Calculate volatility and beta from price data if available
-                if price_data is not None and not price_data.empty:
-                    # Handle MultiIndex columns (from yfinance)
-                    if isinstance(price_data.columns, pd.MultiIndex):
-                        price_data.columns = price_data.columns.get_level_values(1)
                     
-                    cols = price_data.columns.str.lower()
-                    price_data.columns = cols
+                    # Prepare risk metrics
+                    risk_metrics_eval = {
+                        'beta': 1.2,
+                        'volatility_252d': 0.25,
+                        'sharpe_ratio': 0.8,
+                    }
                     
-                    # Get close price
-                    if 'close' in price_data.columns:
-                        close_prices = price_data['close']
-                    elif 'adj close' in price_data.columns:
-                        close_prices = price_data['adj close']
-                    else:
-                        close_prices = price_data.iloc[:, -1]  # Last column as fallback
-                    
-                    returns = DataFetcher.calculate_returns(close_prices).dropna()
-                    if not returns.empty:
-                        risk_metrics_eval['volatility_252d'] = DataFetcher.calculate_volatility(returns)
-                        risk_metrics_eval['sharpe_ratio'] = DataFetcher.calculate_sharpe_ratio(returns)
-                        
-                        # Calculate beta against market if possible
+                    # Calculate volatility and beta from price data if available
+                    if price_data is not None and not price_data.empty:
                         try:
-                            market_data = fetch_market_data(period=selected_period)
-                            if market_data is not None and not market_data.empty:
-                                # Handle MultiIndex columns
-                                if isinstance(market_data.columns, pd.MultiIndex):
-                                    market_data.columns = market_data.columns.get_level_values(1)
+                            # Handle MultiIndex columns
+                            if isinstance(price_data.columns, pd.MultiIndex):
+                                price_data.columns = price_data.columns.get_level_values(1)
+                            
+                            price_data.columns = price_data.columns.str.lower()
+                            
+                            # Get close price
+                            if 'close' in price_data.columns:
+                                close_prices = price_data['close']
+                            elif 'adj close' in price_data.columns:
+                                close_prices = price_data['adj close']
+                            else:
+                                close_prices = price_data.iloc[:, -1]
+                            
+                            returns = DataFetcher.calculate_returns(close_prices).dropna()
+                            if not returns.empty:
+                                risk_metrics_eval['volatility_252d'] = DataFetcher.calculate_volatility(returns)
+                                risk_metrics_eval['sharpe_ratio'] = DataFetcher.calculate_sharpe_ratio(returns)
                                 
-                                cols_market = market_data.columns.str.lower()
-                                market_data.columns = cols_market
-                                
-                                # Get close price
-                                if 'close' in market_data.columns:
-                                    market_close = market_data['close']
-                                elif 'adj close' in market_data.columns:
-                                    market_close = market_data['adj close']
-                                else:
-                                    market_close = market_data.iloc[:, -1]
-                                
-                                market_returns = DataFetcher.calculate_returns(market_close).dropna()
-                                if not market_returns.empty:
-                                    beta = DataFetcher.calculate_beta(returns, market_returns)
-                                    risk_metrics_eval['beta'] = beta
+                                # Calculate beta
+                                try:
+                                    market_data = fetch_market_data(period=selected_period)
+                                    if market_data is not None and not market_data.empty:
+                                        if isinstance(market_data.columns, pd.MultiIndex):
+                                            market_data.columns = market_data.columns.get_level_values(1)
+                                        
+                                        market_data.columns = market_data.columns.str.lower()
+                                        
+                                        if 'close' in market_data.columns:
+                                            market_close = market_data['close']
+                                        elif 'adj close' in market_data.columns:
+                                            market_close = market_data['adj close']
+                                        else:
+                                            market_close = market_data.iloc[:, -1]
+                                        
+                                        market_returns = DataFetcher.calculate_returns(market_close).dropna()
+                                        if not market_returns.empty:
+                                            beta = DataFetcher.calculate_beta(returns, market_returns)
+                                            risk_metrics_eval['beta'] = beta
+                                except:
+                                    pass
                         except:
-                            pass  # Use default beta if calculation fails
-                
-                # Evaluate using Five-Lens Framework
-                lens_scores = framework.evaluate_stock(stock_data_eval, financial_metrics_eval, risk_metrics_eval)
-                
-                analysis_results.append({
-                    'Company': f"{ticker}",
-                    'Name': company_name,
-                    'Sector': company_info.get('sector', 'N/A'),
-                    'Composite Score': lens_scores.composite,
-                    'Valuation': lens_scores.valuation,
-                    'Quality': lens_scores.quality,
-                    'Growth': lens_scores.growth,
-                    'Financial Health': lens_scores.financial_health,
-                    'Risk & Momentum': lens_scores.risk_momentum,
-                })
-                
-                detailed_scores[ticker] = {
-                    'scores': lens_scores,
-                    'company_info': company_info,
-                    'info': info,
-                    'stock_data': stock_data_eval,
-                    'financial_metrics': financial_metrics_eval
-                }
+                            pass
+                    
+                    # Evaluate using Five-Lens Framework
+                    lens_scores = framework.evaluate_stock(stock_data_eval, financial_metrics_eval, risk_metrics_eval)
+                    
+                    analysis_results.append({
+                        'Company': f"{ticker}",
+                        'Name': company_name,
+                        'Sector': company_info.get('sector', 'N/A'),
+                        'Composite Score': lens_scores.composite,
+                        'Valuation': lens_scores.valuation,
+                        'Quality': lens_scores.quality,
+                        'Growth': lens_scores.growth,
+                        'Financial Health': lens_scores.financial_health,
+                        'Risk & Momentum': lens_scores.risk_momentum,
+                    })
+                    
+                    detailed_scores[ticker] = lens_scores
+                    
+                except Exception as e:
+                    st.error(f"❌ Error analyzing {ticker}: {str(e)}")
+                    import traceback
+                    st.info(f"Debug: {traceback.format_exc()}")
             
-            # Display Five-Lens Scores Summary
-            st.subheader("🎯 Five-Lens Analysis Summary")
-            df_analysis = pd.DataFrame(analysis_results)
-            
-            # Format numeric columns for display
-            for col in ['Composite Score', 'Valuation', 'Quality', 'Growth', 'Financial Health', 'Risk & Momentum']:
-                if col in df_analysis.columns:
-                    df_analysis[col] = df_analysis[col].apply(lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else x)
-            
-            st.dataframe(df_analysis, width="stretch")
-            
-            # Display individual company analysis
-            st.subheader("📊 Detailed Company Analysis")
-            
-            for ticker, data in detailed_scores.items():
-                scores = data['scores']
-                company_info = data['company_info']
-                info = data['info']
+            # Display results if available
+            if analysis_results:
+                st.markdown("### 🎯 Five-Lens Analysis Summary")
                 
-                signal, color = framework.get_signal(scores.composite)
+                results_df = pd.DataFrame(analysis_results)
+                st.dataframe(results_df, use_container_width=True)
                 
-                with st.expander(f"📈 {ticker} - {company_name} | {signal}"):
-                    # Composite Score and Signal
-                    col1, col2 = st.columns([1, 1])
+                # Detailed analysis by company
+                st.markdown("### 📊 Detailed Company Analysis")
+                
+                for ticker, scores in detailed_scores.items():
+                    company_info = all_data[ticker]['company_info']
+                    company_name = company_info.get('longName', company_info.get('shortName', 'Unknown'))
+                    signal, color = framework.get_signal(scores.composite)
                     
-                    with col1:
-                        st.metric("Composite Score", f"{scores.composite:.1f}/100", 
-                                 delta=f"Signal: {signal.split()[0]}")
-                    
-                    with col2:
-                        st.metric("Sector", company_info.get('sector', 'N/A'))
-                    
-                    st.divider()
-                    
-                    # Five Lens Scores Visualization
-                    st.markdown("**Five-Lens Scores:**")
-                    col1, col2, col3, col4, col5 = st.columns(5)
-                    
-                    with col1:
-                        st.metric("Valuation", f"{scores.valuation:.1f}", delta="")
-                    with col2:
-                        st.metric("Quality", f"{scores.quality:.1f}", delta="")
-                    with col3:
-                        st.metric("Growth", f"{scores.growth:.1f}", delta="")
-                    with col4:
-                        st.metric("Financial Health", f"{scores.financial_health:.1f}", delta="")
-                    with col5:
-                        st.metric("Risk & Momentum", f"{scores.risk_momentum:.1f}", delta="")
-                    
-                    st.divider()
-                    
-                    # Key Financial Data
-                    st.markdown("**Key Financial Metrics:**")
-                    col1, col2, col3, col4 = st.columns(4)
-                    
-                    with col1:
-                        revenue = (company_info.get('totalRevenue', 0) or 0) / 1e9
-                        st.metric("Revenue ($B)", f"${revenue:.1f}")
-                    with col2:
-                        pe = company_info.get('trailingPE')
-                        st.metric("P/E Ratio", f"{pe:.1f}" if pe else "N/A")
-                    with col3:
-                        pb = company_info.get('priceToBook')
-                        st.metric("P/B Ratio", f"{pb:.1f}" if pb else "N/A")
-                    with col4:
-                        roe = company_info.get('returnOnEquity')
-                        if roe:
-                            st.metric("ROE", f"{roe*100:.1f}%")
-                        else:
-                            st.metric("ROE", "N/A")
-                    
-                    # Investment Recommendation
-                    st.markdown(framework.generate_recommendation(scores, data['stock_data']))
+                    with st.expander(f"📈 {ticker} - {company_name} | {signal}"):
+                        col1, col2, col3 = st.columns(3)
+                        
+                        with col1:
+                            st.metric("Composite Score", f"{scores.composite:.1f}/100")
+                            st.metric("Valuation", f"{scores.valuation:.1f}")
+                            st.metric("Quality", f"{scores.quality:.1f}")
+                        
+                        with col2:
+                            st.metric("Growth", f"{scores.growth:.1f}")
+                            st.metric("Financial Health", f"{scores.financial_health:.1f}")
+                            st.metric("Risk & Momentum", f"{scores.risk_momentum:.1f}")
+                        
+                        with col3:
+                            st.metric("Signal", signal)
+                            st.markdown("**Score Breakdown:**")
+                            st.markdown(f"- **Valuation**: {scores.valuation:.1f}/100")
+                            st.markdown(f"- **Quality**: {scores.quality:.1f}/100")
+                            st.markdown(f"- **Growth**: {scores.growth:.1f}/100")
+                            st.markdown(f"- **Health**: {scores.financial_health:.1f}/100")
+                            st.markdown(f"- **Risk**: {scores.risk_momentum:.1f}/100")
+                        
+                        # Investment recommendation
+                        st.markdown(framework.generate_recommendation(scores, {}))
     
     except Exception as e:
         st.error(f"❌ Error in financial analysis: {str(e)}")
+        import traceback
+        st.info(f"Debug: {traceback.format_exc()}")
         st.info("💡 Please try clicking 'Refresh Data' button in the sidebar")
-
-# ============================================================================
 # TAB 3: MARKET ANALYSIS
 # ============================================================================
 
