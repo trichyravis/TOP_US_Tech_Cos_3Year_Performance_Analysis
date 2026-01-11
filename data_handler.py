@@ -1,402 +1,122 @@
 
 """
-Data Handler Module - Manages all data fetching, caching, and validation
-Purpose: Single source for data acquisition with fallback mechanisms
+Data Handler Module - Manages all data fetching with period selection
 """
 
 import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
-import requests
-import sqlite3
-import logging
 from datetime import datetime, timedelta
-from config import (
-    TICKERS, DATA_PERIOD, DATA_INTERVAL, CACHE_TTL_SECONDS,
-    MAX_RETRIES, RETRY_DELAY_SECONDS, RF_RATE_SOURCE, RF_RATE_TICKER,
-    RF_RATE_DEFAULT, DB_PATH, BACKUP_DIR, LOG_DIR, TRADING_DAYS_PER_YEAR
-)
-import time
+import logging
 
 # ============================================================================
-# LOGGING SETUP
+# CONFIGURATION
 # ============================================================================
-logging.basicConfig(
-    filename=f'{LOG_DIR}/data_handler.log',
-    level=logging.INFO,
-    format='%(asctime)s - %(levelname)s - %(message)s'
-)
+
+TICKERS = ['NVDA', 'MSFT', 'AAPL', 'GOOGL', 'AMZN']
+TRADING_DAYS_PER_YEAR = 252
+RF_RATE_DEFAULT = 0.04  # 4% default risk-free rate
+
+# ============================================================================
+# LOGGING
+# ============================================================================
+
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 
 # ============================================================================
-# DATABASE INITIALIZATION & MANAGEMENT
+# DATA FETCHER CLASS
 # ============================================================================
 
-def initialize_database():
-    """
-    Initialize SQLite database with required tables
-    Creates tables for price cache and metadata if they don't exist
-    """
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        cursor = conn.cursor()
-        
-        # Create price cache table
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS price_cache (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            ticker TEXT NOT NULL,
-            date DATE NOT NULL,
-            open REAL,
-            high REAL,
-            low REAL,
-            close REAL NOT NULL,
-            adj_close REAL,
-            volume INTEGER,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-            UNIQUE(ticker, date)
-        )
-        ''')
-        
-        # Create metadata table for update tracking
-        cursor.execute('''
-        CREATE TABLE IF NOT EXISTS metadata (
-            ticker TEXT PRIMARY KEY,
-            last_update TIMESTAMP,
-            records_count INTEGER,
-            data_quality_score REAL
-        )
-        ''')
-        
-        # Create indices for faster queries
-        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ticker_date ON price_cache(ticker, date)')
-        
-        conn.commit()
-        conn.close()
-        logger.info("Database initialized successfully")
-    except Exception as e:
-        logger.error(f"Failed to initialize database: {e}")
-
-
-# ============================================================================
-# PRIMARY DATA FETCHING
-# ============================================================================
-
-@st.cache_data(ttl=CACHE_TTL_SECONDS)
-def fetch_risk_free_rate():
-    """
-    Fetch current 10-Year US Treasury Yield (risk-free rate)
-    Returns float or default value if API fails
+class DataFetcher:
+    """Main class for fetching and processing stock data"""
     
-    Returns:
-        float: Risk-free rate as decimal (e.g., 0.0425 for 4.25%)
-    """
-    try:
-        # Method 1: FRED API (most reliable) - direct HTTP request
-        fred_url = f"https://fred.stlouisfed.org/data/{RF_RATE_TICKER}.json"
-        response = requests.get(fred_url, timeout=5)
-        
-        if response.status_code == 200:
-            data = response.json()
-            # Get the most recent data point
-            observations = data.get('observations', [])
-            if observations:
-                latest_value = observations[-1].get('value')
-                if latest_value and latest_value != '.':
-                    rf_rate = float(latest_value) / 100  # Convert % to decimal
-                    logger.info(f"Risk-free rate fetched from FRED: {rf_rate:.4f}")
-                    return rf_rate
-    except Exception as e:
-        logger.warning(f"FRED API failed: {e}. Trying yfinance...")
-    
-    try:
-        # Method 2: Fallback to yfinance TNX (10Y Yield)
-        tnx_data = yf.download('^TNX', period='1d', progress=False)
-        if not tnx_data.empty:
-            rf_rate = tnx_data['Close'].iloc[-1] / 100
-            logger.info(f"Risk-free rate fetched from yfinance: {rf_rate:.4f}")
-            return rf_rate
-    except Exception as e:
-        logger.error(f"All RF rate sources failed: {e}. Using default.")
-    
-    return RF_RATE_DEFAULT
-
-
-def fetch_stock_price_data_robust(ticker, max_retries=MAX_RETRIES):
-    """
-    Fetch historical stock price data with retry logic and fallback mechanisms
-    
-    Args:
-        ticker (str): Stock ticker (e.g., 'NVDA')
-        max_retries (int): Number of retry attempts
-    
-    Returns:
-        pd.DataFrame: OHLCV data or None if all methods fail
-    """
-    for attempt in range(max_retries):
-        try:
-            # Suppress yfinance warnings and info messages
-            import warnings
-            warnings.filterwarnings('ignore')
-            
-            data = yf.download(
-                ticker,
-                period=DATA_PERIOD,
-                interval=DATA_INTERVAL,
-                progress=False,
-                prepost=False,
-                threads=False
-            )
-            
-            if data is None or data.empty:
-                logger.warning(f"Empty data returned for {ticker}, retrying...")
-                continue
-            
-            # Rename columns to lowercase for consistency
-            data.columns = data.columns.str.lower()
-            
-            # Validate data
-            if len(data) < 10:
-                logger.warning(f"Only {len(data)} records for {ticker}, retrying...")
-                continue
-            
-            logger.info(f"Successfully fetched {len(data)} records for {ticker}")
-            return data
-            
-        except (ConnectionError, TimeoutError) as e:
-            wait_time = min(RETRY_DELAY_SECONDS ** (attempt + 1), 10)
-            logger.warning(
-                f"Attempt {attempt+1}/{max_retries} failed for {ticker}: {e}. "
-                f"Retrying in {wait_time}s..."
-            )
-            time.sleep(wait_time)
-        
-        except Exception as e:
-            logger.warning(f"Attempt {attempt+1} error for {ticker}: {str(e)[:100]}")
-            if attempt < max_retries - 1:
-                time.sleep(1)
-    
-    # All retries exhausted - try fallback mechanisms
-    logger.warning(f"All fetch attempts failed for {ticker}. Checking SQLite cache...")
-    cached_data = load_from_sqlite(ticker)
-    
-    if cached_data is not None and not cached_data.empty:
-        logger.info(f"Loaded {len(cached_data)} records from cache for {ticker}")
-        return cached_data
-    
-    # Final fallback: CSV backup
-    logger.warning(f"Cache empty for {ticker}. Trying CSV backup...")
-    backup_data = load_from_csv(ticker)
-    
-    if backup_data is not None:
-        logger.info(f"Loaded {len(backup_data)} records from CSV for {ticker}")
-        return backup_data
-    
-    logger.error(f"All data sources exhausted for {ticker}")
-    return None
-
-
-# ============================================================================
-# CACHE MANAGEMENT
-# ============================================================================
-
-def save_to_sqlite(ticker, data):
-    """
-    Persist stock price data to SQLite cache
-    
-    Args:
-        ticker (str): Stock ticker
-        data (pd.DataFrame): OHLCV data
-    """
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        
-        # Reset index to include date as column
-        data_to_save = data.reset_index()
-        data_to_save['ticker'] = ticker
-        
-        # Insert/replace data (UNIQUE constraint on ticker, date)
-        data_to_save.to_sql('price_cache', conn, if_exists='append', index=False)
-        
-        # Update metadata
-        cursor = conn.cursor()
-        cursor.execute('''
-        INSERT OR REPLACE INTO metadata (ticker, last_update, records_count, data_quality_score)
-        VALUES (?, ?, ?, ?)
-        ''', (ticker, datetime.now(), len(data), 0.95))
-        
-        conn.commit()
-        conn.close()
-        logger.info(f"Saved {len(data)} records for {ticker} to SQLite")
-        
-    except Exception as e:
-        logger.error(f"Failed to save {ticker} to SQLite: {e}")
-
-
-def load_from_sqlite(ticker):
-    """
-    Load stock price data from SQLite cache
-    
-    Args:
-        ticker (str): Stock ticker
-    
-    Returns:
-        pd.DataFrame or None
-    """
-    try:
-        conn = sqlite3.connect(DB_PATH)
-        query = f"""
-        SELECT date, open, high, low, close, adj_close, volume 
-        FROM price_cache 
-        WHERE ticker = '{ticker}' 
-        ORDER BY date DESC 
-        LIMIT {TRADING_DAYS_PER_YEAR * 3}
+    @staticmethod
+    @st.cache_data(ttl=3600)
+    def fetch_stock_data(symbol, period="3y"):
         """
-        df = pd.read_sql_query(query, conn)
-        conn.close()
+        Fetch stock price data from Yahoo Finance
         
-        if df.empty:
+        Args:
+            symbol (str): Stock ticker
+            period (str): Data period ("1y", "2y", "3y")
+        
+        Returns:
+            pd.DataFrame: Price data with OHLCV
+        """
+        try:
+            data = yf.download(symbol, period=period, progress=False)
+            return data
+        except Exception as e:
+            logger.error(f"Error fetching {symbol}: {e}")
             return None
-        
-        # Convert date to datetime and set as index
-        df['date'] = pd.to_datetime(df['date'])
-        df.set_index('date', inplace=True)
-        df = df.sort_index()
-        
-        # Rename columns to match yfinance format
-        df.columns = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
-        
-        logger.info(f"Loaded {len(df)} records for {ticker} from SQLite")
-        return df
-        
-    except Exception as e:
-        logger.error(f"Failed to load {ticker} from SQLite: {e}")
-        return None
-
-
-def load_from_csv(ticker):
-    """
-    Load stock price data from CSV backup
     
-    Args:
-        ticker (str): Stock ticker
+    @staticmethod
+    def calculate_returns(prices):
+        """Calculate daily returns"""
+        try:
+            if prices is None or len(prices) < 2:
+                return pd.Series()
+            return prices.pct_change()
+        except:
+            return pd.Series()
     
-    Returns:
-        pd.DataFrame or None
-    """
-    try:
-        filepath = f'{BACKUP_DIR}/{ticker}_3y_backup.csv'
-        df = pd.read_csv(filepath, index_col=0, parse_dates=True)
-        logger.info(f"Loaded {len(df)} records for {ticker} from CSV")
-        return df
-    except FileNotFoundError:
-        logger.warning(f"No CSV backup found for {ticker}")
-        return None
-    except Exception as e:
-        logger.error(f"Failed to load {ticker} from CSV: {e}")
-        return None
+    @staticmethod
+    def calculate_annual_return(prices):
+        """Calculate annualized return"""
+        try:
+            if prices is None or len(prices) < 2:
+                return 0.0
+            start_price = prices.iloc[0]
+            end_price = prices.iloc[-1]
+            total_return = (end_price - start_price) / start_price
+            years = len(prices) / TRADING_DAYS_PER_YEAR
+            annual_return = (1 + total_return) ** (1 / years) - 1
+            return annual_return
+        except:
+            return 0.0
+    
+    @staticmethod
+    def calculate_volatility(returns):
+        """Calculate daily volatility"""
+        try:
+            if returns is None or len(returns) < 2:
+                return 0.0
+            return returns.std()
+        except:
+            return 0.0
+    
+    @staticmethod
+    def calculate_sharpe_ratio(returns, risk_free_rate=RF_RATE_DEFAULT):
+        """Calculate Sharpe Ratio"""
+        try:
+            if len(returns) < 2:
+                return 0.0
+            annual_return = returns.mean() * TRADING_DAYS_PER_YEAR
+            annual_volatility = returns.std() * np.sqrt(TRADING_DAYS_PER_YEAR)
+            if annual_volatility == 0:
+                return 0.0
+            return (annual_return - risk_free_rate) / annual_volatility
+        except:
+            return 0.0
+    
+    @staticmethod
+    def calculate_max_drawdown(prices):
+        """Calculate maximum drawdown"""
+        try:
+            if prices is None or len(prices) < 2:
+                return 0.0
+            running_max = prices.expanding().max()
+            drawdown = (prices - running_max) / running_max
+            return drawdown.min()
+        except:
+            return 0.0
 
 
 # ============================================================================
-# DATA VALIDATION
-# ============================================================================
-
-def validate_data_quality(df, ticker):
-    """
-    Validate data quality and flag issues
-    
-    Args:
-        df (pd.DataFrame): OHLCV data
-        ticker (str): Stock ticker
-    
-    Returns:
-        dict: Validation results {issue: severity}
-    """
-    issues = {}
-    
-    if df is None or df.empty:
-        return {'empty_data': 'Critical'}
-    
-    # Check for missing values
-    missing_pct = df.isnull().sum().sum() / (df.size) * 100 if df.size > 0 else 0
-    if missing_pct > 5:
-        issues['missing_values'] = f"High: {missing_pct:.1f}% missing"
-    
-    # Check for stale data
-    if (datetime.now() - df.index[-1]).days > 2:
-        issues['stale_data'] = f"Data is {(datetime.now() - df.index[-1]).days} days old"
-    
-    # Log issues
-    if issues:
-        logger.warning(f"{ticker} data issues: {issues}")
-    else:
-        logger.info(f"{ticker} passed data quality checks")
-    
-    return issues
-
-
-# ============================================================================
-# DATA RETRIEVAL WRAPPER (PUBLIC INTERFACE)
-# ============================================================================
-
-def get_all_stock_data():
-    """
-    Fetch data for all tickers with caching
-    
-    Returns:
-        dict: {ticker: DataFrame}
-    """
-    all_data = {}
-    
-    for ticker in TICKERS.keys():
-        data = fetch_stock_price_data_robust(ticker)
-        if data is not None:
-            # Validate & save to cache
-            issues = validate_data_quality(data, ticker)
-            save_to_sqlite(ticker, data)
-            all_data[ticker] = data
-        else:
-            st.warning(f"⚠️ Could not fetch data for {ticker}. Using cached data...")
-            cached_data = load_from_sqlite(ticker)
-            if cached_data is not None:
-                all_data[ticker] = cached_data
-    
-    return all_data
-
-
-@st.cache_data(ttl=CACHE_TTL_SECONDS)
-def get_stock_data(ticker):
-    """
-    Get stock data for single ticker with caching
-    
-    Args:
-        ticker (str): Stock ticker
-    
-    Returns:
-        pd.DataFrame or None
-    """
-    data = fetch_stock_price_data_robust(ticker)
-    if data is not None:
-        save_to_sqlite(ticker, data)
-        return data
-    else:
-        return load_from_sqlite(ticker)
-
-
-# ============================================================================
-# INITIALIZATION
-# ============================================================================
-
-def initialize_data_handler():
-    """Call on app startup to set up database"""
-    initialize_database()
-    logger.info("Data handler initialized")
-
-
-# ============================================================================
-# COMPANY DATA FETCHING
+# DATA FETCHING FUNCTIONS
 # ============================================================================
 
 def fetch_all_company_data(period="3y"):
@@ -409,10 +129,9 @@ def fetch_all_company_data(period="3y"):
     Returns:
         dict: Data for all companies
     """
-    tickers = TICKERS
     all_data = {}
     
-    for ticker in tickers:
+    for ticker in TICKERS:
         try:
             # Fetch price data
             price_data = DataFetcher.fetch_stock_data(ticker, period=period)
