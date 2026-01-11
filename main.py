@@ -1,3 +1,4 @@
+
 """
 Main Application File - Streamlit Entry Point
 Purpose: Render the complete 5-tab dashboard for US Tech Companies Analysis
@@ -17,7 +18,7 @@ from config import (
 )
 from styles import apply_mountain_path_theme, render_header, render_footer
 from components import (
-    render_company_selector, render_sidebar_header, render_metrics_row,
+    render_sidebar_header, render_metrics_row,
     render_data_table, render_candlestick_chart
 )
 from data_handler import (
@@ -165,86 +166,70 @@ with tab1:
 # ============================================================================
 
 with tab2:
-    st.subheader("💰 Financial Performance Analysis")
+    st.subheader("💰 Financial Performance Analysis - All TOP US Tech Companies")
     
-    with st.sidebar:
-        render_sidebar_header("Filters", "🔍")
-        selected_ticker = render_company_selector(mode='single', default='NVDA')
-        show_all = st.checkbox("Compare All Companies", value=False)
+    st.info("📊 Analyzing all 5 companies: NVDA, MSFT, AAPL, GOOGL, AMZN")
     
-    if show_all:
-        st.info("Comparing all 5 companies financial metrics")
+    try:
+        # Fetch financial data for all companies
+        financial_data = []
         
-        try:
-            # Fetch financial data for all companies
-            financial_data = []
+        for ticker in TICKERS.keys():
+            try:
+                ticker_obj = yf.Ticker(ticker)
+                info = ticker_obj.info
+                
+                financial_data.append({
+                    'Company': f"{ticker} - {TICKERS[ticker]}",
+                    'Revenue ($B)': info.get('totalRevenue', 0) / 1e9,
+                    'Operating Income ($B)': info.get('operatingIncome', 0) / 1e9,
+                    'Net Income ($B)': info.get('netIncome', 0) / 1e9,
+                    'Employees': info.get('fullTimeEmployees', 0),
+                    'Market Cap ($B)': info.get('marketCap', 0) / 1e9,
+                })
+            except Exception as e:
+                st.warning(f"Could not fetch data for {ticker}: {e}")
+        
+        if financial_data:
+            df_financial = pd.DataFrame(financial_data)
+            
+            # Summary metrics
+            col1, col2, col3 = st.columns(3)
+            with col1:
+                st.metric("Highest Revenue", 
+                         f"${df_financial['Revenue ($B)'].max():.1f}B")
+            with col2:
+                st.metric("Highest Net Income", 
+                         f"${df_financial['Net Income ($B)'].max():.1f}B")
+            with col3:
+                st.metric("Largest Market Cap", 
+                         f"${df_financial['Market Cap ($B)'].max():.1f}B")
+            
+            st.subheader("Financial Metrics Comparison")
+            render_data_table(df_financial)
+            
+            # Show individual company details
+            st.subheader("Individual Company Details")
             
             for ticker in TICKERS.keys():
-                try:
-                    ticker_obj = yf.Ticker(ticker)
-                    info = ticker_obj.info
+                with st.expander(f"📈 {ticker} - {TICKERS[ticker]}"):
+                    col1, col2, col3, col4 = st.columns(4)
                     
-                    financial_data.append({
-                        'Company': ticker,
-                        'Revenue ($B)': info.get('totalRevenue', 0) / 1e9,
-                        'Operating Income ($B)': info.get('operatingIncome', 0) / 1e9,
-                        'Net Income ($B)': info.get('netIncome', 0) / 1e9,
-                        'Employees': info.get('fullTimeEmployees', 0),
-                        'Market Cap ($B)': info.get('marketCap', 0) / 1e9,
-                    })
-                except Exception as e:
-                    st.warning(f"Could not fetch data for {ticker}: {e}")
-            
-            if financial_data:
-                df_financial = pd.DataFrame(financial_data)
-                
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Highest Revenue", 
-                             f"${df_financial['Revenue ($B)'].max():.1f}B")
-                with col2:
-                    st.metric("Highest Net Income", 
-                             f"${df_financial['Net Income ($B)'].max():.1f}B")
-                with col3:
-                    st.metric("Largest Market Cap", 
-                             f"${df_financial['Market Cap ($B)'].max():.1f}B")
-                
-                st.subheader("Financial Metrics Comparison")
-                render_data_table(df_financial)
-        
-        except Exception as e:
-            st.error(f"Error fetching financial data: {e}")
+                    company_data = df_financial[df_financial['Company'].str.contains(ticker)]
+                    if not company_data.empty:
+                        company_data = company_data.iloc[0]
+                        
+                        with col1:
+                            st.metric("Annual Revenue", f"${company_data['Revenue ($B)']:.1f}B")
+                        with col2:
+                            st.metric("Operating Income", f"${company_data['Operating Income ($B)']:.1f}B")
+                        with col3:
+                            st.metric("Net Income", f"${company_data['Net Income ($B)']:.1f}B")
+                        with col4:
+                            st.metric("Market Cap", f"${company_data['Market Cap ($B)']:.1f}B")
     
-    else:
-        st.info(f"Analyzing {selected_ticker} - {TICKERS[selected_ticker]}")
-        
-        try:
-            ticker_obj = yf.Ticker(selected_ticker)
-            info = ticker_obj.info
-            
-            # Display key metrics
-            col1, col2, col3, col4 = st.columns(4)
-            
-            with col1:
-                revenue = info.get('totalRevenue', 0) / 1e9
-                st.metric("Annual Revenue", f"${revenue:.1f}B")
-            
-            with col2:
-                op_income = info.get('operatingIncome', 0) / 1e9
-                st.metric("Operating Income", f"${op_income:.1f}B")
-            
-            with col3:
-                net_income = info.get('netIncome', 0) / 1e9
-                st.metric("Net Income", f"${net_income:.1f}B")
-            
-            with col4:
-                market_cap = info.get('marketCap', 0) / 1e9
-                st.metric("Market Cap", f"${market_cap:.1f}B")
-            
-            st.divider()
-            
-            # Get historical price data for trend
-            price_data = get_stock_data(selected_ticker)
+    except Exception as e:
+        st.error(f"Error fetching financial data: {e}")
             
             if price_data is not None and len(price_data) > 0:
                 # Calculate margins
@@ -294,22 +279,12 @@ with tab2:
 # ============================================================================
 
 with tab3:
-    st.subheader("📈 Market Analysis")
+    st.subheader("📈 Market Analysis - All TOP US Tech Companies")
     
-    with st.sidebar:
-        render_sidebar_header("Filters", "🔍")
-        selected_tickers = st.multiselect(
-            "Select Companies:",
-            options=list(TICKERS.keys()),
-            default=['NVDA', 'MSFT'],
-            format_func=lambda x: f"{x} - {TICKERS[x]}"
-        )
+    # Always use all companies
+    selected_tickers = list(TICKERS.keys())
     
-    if not selected_tickers:
-        st.error("Select at least one company")
-        st.stop()
-    
-    st.info(f"Analyzing {', '.join(selected_tickers)}")
+    st.info(f"📊 Analyzing all {len(selected_tickers)} companies: {', '.join(selected_tickers)}")
     
     try:
         # Get price data
@@ -320,46 +295,51 @@ with tab3:
                 price_data_dict[ticker] = data
         
         if not price_data_dict:
-            st.error("Could not fetch price data for selected companies")
+            st.error("Could not fetch price data for companies")
             st.stop()
         
-        # Candlestick chart for first selected ticker
-        st.subheader(f"Price Movement - {selected_tickers[0]}")
+        # Candlestick charts for all companies in tabs
+        st.subheader("📈 Price Movement - Individual Companies")
         
-        price_data = price_data_dict[selected_tickers[0]]
+        chart_tabs = st.tabs([f"{ticker} - {TICKERS[ticker]}" for ticker in selected_tickers])
         
-        fig = go.Figure(data=[go.Candlestick(
-            x=price_data.index,
-            open=price_data['Open'],
-            high=price_data['High'],
-            low=price_data['Low'],
-            close=price_data['Close']
-        )])
+        for idx, ticker in enumerate(selected_tickers):
+            with chart_tabs[idx]:
+                if ticker in price_data_dict:
+                    price_data = price_data_dict[ticker]
+                    
+                    fig = go.Figure(data=[go.Candlestick(
+                        x=price_data.index,
+                        open=price_data.get('open', price_data.get('Open')),
+                        high=price_data.get('high', price_data.get('High')),
+                        low=price_data.get('low', price_data.get('Low')),
+                        close=price_data.get('close', price_data.get('Close'))
+                    )])
+                    
+                    fig.update_layout(
+                        title=f"{ticker} - {TICKERS[ticker]} - Candlestick Chart (3 Years)",
+                        xaxis_title="Date",
+                        yaxis_title="Price ($)",
+                        template="plotly_white",
+                        height=500,
+                        hovermode="x unified"
+                    )
+                    
+                    st.plotly_chart(fig, use_container_width=True)
         
-        fig.update_layout(
-            title=f"{selected_tickers[0]} - Candlestick Chart (3 Years)",
-            xaxis_title="Date",
-            yaxis_title="Price ($)",
-            template="plotly_white",
-            height=500,
-            hovermode="x unified"
-        )
-        
-        st.plotly_chart(fig, use_container_width=True)
-        
-        # Annual returns comparison
-        st.subheader("Annual Returns Comparison")
+        # Annual returns comparison - ALL COMPANIES
+        st.subheader("📊 Annual Returns Comparison - All Companies")
         
         annual_returns = {}
         for ticker, data in price_data_dict.items():
-            annual_return = calculate_annual_return(data['Close'])
+            annual_return = calculate_annual_return(data['close'] if 'close' in data.columns else data['Close'])
             annual_returns[ticker] = annual_return * 100
         
         fig = go.Figure()
         fig.add_trace(go.Bar(
             x=list(annual_returns.keys()),
             y=list(annual_returns.values()),
-            marker_color=[COLORS['primary'] if v > 0 else COLORS['error'] 
+            marker_color=[COLORS['primary'] if v > 0 else '#d62728' 
                          for v in annual_returns.values()]
         ))
         
@@ -407,25 +387,17 @@ with tab3:
 # ============================================================================
 
 with tab4:
-    st.subheader("⚠️ Risk Analysis")
+    st.subheader("⚠️ Risk Analysis - All TOP US Tech Companies")
     
+    # Always use all companies
+    selected_tickers = list(TICKERS.keys())
+    
+    # Confidence level selector
     with st.sidebar:
         render_sidebar_header("Risk Parameters", "⚙️")
-        
-        selected_tickers = st.multiselect(
-            "Select Companies:",
-            options=list(TICKERS.keys()),
-            default=['NVDA', 'MSFT'],
-            format_func=lambda x: f"{x} - {TICKERS[x]}"
-        )
-        
         confidence = st.radio("VaR Confidence Level:", [90, 95, 99], index=1) / 100
     
-    if not selected_tickers:
-        st.error("Select at least one company")
-        st.stop()
-    
-    st.info(f"Analyzing risk metrics for {', '.join(selected_tickers)} at {int(confidence*100)}% confidence")
+    st.info(f"📊 Analyzing risk metrics for all {len(selected_tickers)} companies at {int(confidence*100)}% confidence level")
     
     try:
         rf_rate = fetch_risk_free_rate()
@@ -436,13 +408,14 @@ with tab4:
         for ticker in selected_tickers:
             data = get_stock_data(ticker)
             if data is not None:
-                returns = calculate_returns(data['Close'])
-                summary = generate_risk_summary(ticker, data['Close'], returns, rf_rate)
+                close_col = 'close' if 'close' in data.columns else 'Close'
+                returns = calculate_returns(data[close_col])
+                summary = generate_risk_summary(ticker, data[close_col], returns, rf_rate)
                 risk_summaries.append(summary)
         
         if risk_summaries:
             # Risk metrics table
-            st.subheader("Risk Metrics Dashboard")
+            st.subheader("Risk Metrics Dashboard - All Companies")
             
             risk_df = pd.DataFrame(risk_summaries)
             
@@ -463,7 +436,7 @@ with tab4:
             st.divider()
             
             # Key metrics highlights
-            st.subheader("Risk Metrics Highlights")
+            st.subheader("🎯 Risk Metrics Highlights")
             
             col1, col2, col3, col4 = st.columns(4)
             
