@@ -55,6 +55,17 @@ st.markdown("""
         color: white !important;
     }
     
+    /* Button styling - keep text dark for visibility */
+    [data-testid="stSidebar"] button {
+        color: #003366 !important;
+        background-color: #FFD700 !important;
+        font-weight: bold !important;
+    }
+    
+    [data-testid="stSidebar"] button:hover {
+        background-color: #FFC700 !important;
+    }
+    
     .metric-card {
         background: linear-gradient(135deg, #003366 0%, #004d80 100%);
         color: white;
