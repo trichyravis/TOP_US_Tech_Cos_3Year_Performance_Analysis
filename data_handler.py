@@ -137,25 +137,36 @@ def fetch_stock_price_data_robust(ticker, max_retries=MAX_RETRIES):
     """
     for attempt in range(max_retries):
         try:
+            # Suppress yfinance warnings and info messages
+            import warnings
+            warnings.filterwarnings('ignore')
+            
             data = yf.download(
                 ticker,
                 period=DATA_PERIOD,
                 interval=DATA_INTERVAL,
                 progress=False,
-                prepost=False
+                prepost=False,
+                threads=False
             )
             
-            if data.empty:
-                raise ValueError(f"No data returned for {ticker}")
+            if data is None or data.empty:
+                logger.warning(f"Empty data returned for {ticker}, retrying...")
+                continue
             
             # Rename columns to lowercase for consistency
             data.columns = data.columns.str.lower()
+            
+            # Validate data
+            if len(data) < 10:
+                logger.warning(f"Only {len(data)} records for {ticker}, retrying...")
+                continue
             
             logger.info(f"Successfully fetched {len(data)} records for {ticker}")
             return data
             
         except (ConnectionError, TimeoutError) as e:
-            wait_time = RETRY_DELAY_SECONDS ** (attempt + 1)
+            wait_time = min(RETRY_DELAY_SECONDS ** (attempt + 1), 10)
             logger.warning(
                 f"Attempt {attempt+1}/{max_retries} failed for {ticker}: {e}. "
                 f"Retrying in {wait_time}s..."
@@ -163,8 +174,9 @@ def fetch_stock_price_data_robust(ticker, max_retries=MAX_RETRIES):
             time.sleep(wait_time)
         
         except Exception as e:
-            logger.error(f"Unexpected error for {ticker}: {e}")
-            break
+            logger.warning(f"Attempt {attempt+1} error for {ticker}: {str(e)[:100]}")
+            if attempt < max_retries - 1:
+                time.sleep(1)
     
     # All retries exhausted - try fallback mechanisms
     logger.warning(f"All fetch attempts failed for {ticker}. Checking SQLite cache...")
