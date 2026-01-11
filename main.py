@@ -265,12 +265,18 @@ with tab3:
                 if ticker in price_data_dict:
                     price_data = price_data_dict[ticker]
                     
+                    # Handle both lowercase and uppercase column names
+                    open_col = 'open' if 'open' in price_data.columns else 'Open'
+                    high_col = 'high' if 'high' in price_data.columns else 'High'
+                    low_col = 'low' if 'low' in price_data.columns else 'Low'
+                    close_col = 'close' if 'close' in price_data.columns else 'Close'
+                    
                     fig = go.Figure(data=[go.Candlestick(
                         x=price_data.index,
-                        open=price_data.get('open', price_data.get('Open')),
-                        high=price_data.get('high', price_data.get('High')),
-                        low=price_data.get('low', price_data.get('Low')),
-                        close=price_data.get('close', price_data.get('Close'))
+                        open=price_data[open_col],
+                        high=price_data[high_col],
+                        low=price_data[low_col],
+                        close=price_data[close_col]
                     )])
                     
                     fig.update_layout(
@@ -289,7 +295,8 @@ with tab3:
         
         annual_returns = {}
         for ticker, data in price_data_dict.items():
-            annual_return = calculate_annual_return(data['close'] if 'close' in data.columns else data['Close'])
+            close_col = 'close' if 'close' in data.columns else 'Close'
+            annual_return = calculate_annual_return(data[close_col])
             annual_returns[ticker] = annual_return * 100
         
         fig = go.Figure()
