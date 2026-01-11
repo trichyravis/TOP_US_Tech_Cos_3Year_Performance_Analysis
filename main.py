@@ -308,9 +308,22 @@ with tab2:
                 
                 # Calculate volatility and beta from price data if available
                 if price_data is not None and not price_data.empty:
+                    # Handle MultiIndex columns (from yfinance)
+                    if isinstance(price_data.columns, pd.MultiIndex):
+                        price_data.columns = price_data.columns.get_level_values(1)
+                    
                     cols = price_data.columns.str.lower()
                     price_data.columns = cols
-                    returns = DataFetcher.calculate_returns(price_data['close']).dropna()
+                    
+                    # Get close price
+                    if 'close' in price_data.columns:
+                        close_prices = price_data['close']
+                    elif 'adj close' in price_data.columns:
+                        close_prices = price_data['adj close']
+                    else:
+                        close_prices = price_data.iloc[:, -1]  # Last column as fallback
+                    
+                    returns = DataFetcher.calculate_returns(close_prices).dropna()
                     if not returns.empty:
                         risk_metrics_eval['volatility_252d'] = DataFetcher.calculate_volatility(returns)
                         risk_metrics_eval['sharpe_ratio'] = DataFetcher.calculate_sharpe_ratio(returns)
@@ -319,9 +332,22 @@ with tab2:
                         try:
                             market_data = fetch_market_data(period=selected_period)
                             if market_data is not None and not market_data.empty:
+                                # Handle MultiIndex columns
+                                if isinstance(market_data.columns, pd.MultiIndex):
+                                    market_data.columns = market_data.columns.get_level_values(1)
+                                
                                 cols_market = market_data.columns.str.lower()
                                 market_data.columns = cols_market
-                                market_returns = DataFetcher.calculate_returns(market_data['close']).dropna()
+                                
+                                # Get close price
+                                if 'close' in market_data.columns:
+                                    market_close = market_data['close']
+                                elif 'adj close' in market_data.columns:
+                                    market_close = market_data['adj close']
+                                else:
+                                    market_close = market_data.iloc[:, -1]
+                                
+                                market_returns = DataFetcher.calculate_returns(market_close).dropna()
                                 if not market_returns.empty:
                                     beta = DataFetcher.calculate_beta(returns, market_returns)
                                     risk_metrics_eval['beta'] = beta
@@ -505,28 +531,37 @@ with tab3:
                     company_info = data.get('company_info', {})
                     
                     if price_data is not None and not price_data.empty:
+                        # Handle MultiIndex columns from yfinance
+                        if isinstance(price_data.columns, pd.MultiIndex):
+                            price_data.columns = price_data.columns.get_level_values(1)
+                        
                         # Ensure column names are correct
                         cols = price_data.columns.str.lower()
                         price_data.columns = cols
                         
-                        fig = go.Figure(data=[go.Candlestick(
-                            x=price_data.index,
-                            open=price_data['open'],
-                            high=price_data['high'],
-                            low=price_data['low'],
-                            close=price_data['close']
-                        )])
-                        
-                        fig.update_layout(
-                            title=f"{ticker} - {company_info.get('name', 'Unknown')} (3-Year Candlestick)",
-                            xaxis_title="Date",
-                            yaxis_title="Price ($)",
-                            template="plotly_white",
-                            height=500,
-                            hovermode="x unified"
-                        )
-                        
-                        st.plotly_chart(fig, use_container_width=True)
+                        # Ensure all required columns exist
+                        required_cols = ['open', 'high', 'low', 'close']
+                        if all(col in price_data.columns for col in required_cols):
+                            fig = go.Figure(data=[go.Candlestick(
+                                x=price_data.index,
+                                open=price_data['open'],
+                                high=price_data['high'],
+                                low=price_data['low'],
+                                close=price_data['close']
+                            )])
+                            
+                            fig.update_layout(
+                                title=f"{ticker} - {company_info.get('name', 'Unknown')} (3-Year Candlestick)",
+                                xaxis_title="Date",
+                                yaxis_title="Price ($)",
+                                template="plotly_white",
+                                height=500,
+                                hovermode="x unified"
+                            )
+                            
+                            st.plotly_chart(fig, use_container_width=True)
+                        else:
+                            st.warning(f"Missing required columns for {ticker}: {price_data.columns.tolist()}")
                     else:
                         st.warning(f"Could not load price data for {ticker}")
             
@@ -537,9 +572,22 @@ with tab3:
             for ticker, data in all_data.items():
                 price_data = data.get('price_data')
                 if price_data is not None and not price_data.empty:
+                    # Handle MultiIndex columns
+                    if isinstance(price_data.columns, pd.MultiIndex):
+                        price_data.columns = price_data.columns.get_level_values(1)
+                    
                     cols = price_data.columns.str.lower()
                     price_data.columns = cols
-                    annual_return = DataFetcher.calculate_annual_return(price_data['close'])
+                    
+                    # Get close price
+                    if 'close' in price_data.columns:
+                        close_prices = price_data['close']
+                    elif 'adj close' in price_data.columns:
+                        close_prices = price_data['adj close']
+                    else:
+                        close_prices = price_data.iloc[:, -1]
+                    
+                    annual_return = DataFetcher.calculate_annual_return(close_prices)
                     annual_returns[ticker] = annual_return * 100
             
             if annual_returns:
