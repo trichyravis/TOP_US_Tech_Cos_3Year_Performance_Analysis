@@ -171,108 +171,173 @@ with tab1:
 with tab2:
     st.subheader("💰 Financial Performance - All TOP US Tech Companies")
     
-    st.info("📊 Loading financial data for all 5 companies...")
+    st.info("📊 Analyzing all 5 companies using Five-Lens Framework...")
     
     try:
+        from financial_performance import FiveLensFramework
+        
         # Fetch all company data
         all_data = fetch_all_company_data()
         
         if not all_data:
             st.error("❌ Could not fetch financial data. Please try refreshing.")
         else:
-            # Build financial metrics table
-            financial_rows = []
+            # Initialize Five-Lens Framework
+            framework = FiveLensFramework()
+            
+            # Build financial analysis for all companies
+            analysis_results = []
+            detailed_scores = {}
             
             for ticker, data in all_data.items():
                 company_info = data.get('company_info', {})
                 info = data.get('info', {})
+                price_data = data.get('price_data')
                 
-                financial_rows.append({
-                    'Company': f"{ticker} - {company_info.get('name', 'Unknown')}",
+                # Prepare stock data for Five-Lens evaluation
+                stock_data_eval = {
+                    'pe_ratio': info.get('trailingPE'),
+                    'pb_ratio': info.get('priceToBook'),
+                    'ps_ratio': info.get('priceToSalesTrailing12Months'),
+                    'dividend_yield': info.get('dividendYield') or 0,
+                    'sector': company_info.get('sector', 'Technology'),
+                    'price_momentum_52w': info.get('fiftyTwoWeekChangePercent'),
+                }
+                
+                # Prepare financial metrics
+                financial_metrics_eval = {
+                    'roe': info.get('returnOnEquity'),
+                    'npm': info.get('profitMargins'),
+                    'roa': info.get('returnOnAssets'),
+                    'roic': info.get('returnOnCapital'),
+                    'debt_to_equity': info.get('debtToEquity'),
+                    'current_ratio': info.get('currentRatio'),
+                    'interest_coverage': info.get('interestCoverage') or 10.0,
+                    'free_cash_flow': info.get('freeCashFlow'),
+                    'revenue_growth_yoy': info.get('revenueGrowth'),
+                    'earnings_growth_yoy': info.get('earningsGrowth'),
+                    'peg_ratio': info.get('pegRatio'),
+                }
+                
+                # Prepare risk metrics
+                risk_metrics_eval = {
+                    'beta': DataFetcher.STOCK_BETA.get(ticker, 1.0),
+                    'volatility_252d': 0.25,  # Default, can be calculated from price_data
+                    'sharpe_ratio': 0.8,  # Default
+                }
+                
+                # Calculate volatility from price data if available
+                if price_data is not None and not price_data.empty:
+                    cols = price_data.columns.str.lower()
+                    price_data.columns = cols
+                    returns = DataFetcher.calculate_returns(price_data['close']).dropna()
+                    if not returns.empty:
+                        risk_metrics_eval['volatility_252d'] = DataFetcher.calculate_volatility(returns)
+                        risk_metrics_eval['sharpe_ratio'] = DataFetcher.calculate_sharpe_ratio(returns)
+                
+                # Evaluate using Five-Lens Framework
+                lens_scores = framework.evaluate_stock(stock_data_eval, financial_metrics_eval, risk_metrics_eval)
+                
+                analysis_results.append({
+                    'Company': f"{ticker}",
+                    'Name': company_info.get('name', 'Unknown'),
                     'Sector': company_info.get('sector', 'N/A'),
-                    'Revenue ($B)': (info.get('totalRevenue', 0) or 0) / 1e9,
-                    'Operating Income ($B)': (info.get('operatingIncome', 0) or 0) / 1e9,
-                    'Net Income ($B)': (info.get('netIncome', 0) or 0) / 1e9,
-                    'Market Cap ($B)': (info.get('marketCap', 0) or 0) / 1e9,
+                    'Composite Score': f"{lens_scores.composite:.1f}",
+                    'Valuation': f"{lens_scores.valuation:.1f}",
+                    'Quality': f"{lens_scores.quality:.1f}",
+                    'Growth': f"{lens_scores.growth:.1f}",
+                    'Financial Health': f"{lens_scores.financial_health:.1f}",
+                    'Risk & Momentum': f"{lens_scores.risk_momentum:.1f}",
                 })
+                
+                detailed_scores[ticker] = {
+                    'scores': lens_scores,
+                    'company_info': company_info,
+                    'info': info,
+                    'stock_data': stock_data_eval,
+                    'financial_metrics': financial_metrics_eval
+                }
             
-            df_financial = pd.DataFrame(financial_rows)
-            
-            # Summary metrics
-            st.subheader("📊 Summary Metrics")
-            col1, col2, col3 = st.columns(3)
-            
-            with col1:
-                max_revenue = df_financial['Revenue ($B)'].max()
-                st.metric("Highest Revenue", f"${max_revenue:.1f}B")
-            with col2:
-                max_income = df_financial['Net Income ($B)'].max()
-                st.metric("Highest Net Income", f"${max_income:.1f}B")
-            with col3:
-                max_cap = df_financial['Market Cap ($B)'].max()
-                st.metric("Largest Market Cap", f"${max_cap:.1f}B")
-            
-            # Financial comparison table
-            st.subheader("Financial Metrics Comparison")
+            # Display Five-Lens Scores Summary
+            st.subheader("🎯 Five-Lens Analysis Summary")
+            df_analysis = pd.DataFrame(analysis_results)
             st.dataframe(
-                df_financial.style.format({
-                    'Revenue ($B)': '{:.1f}',
-                    'Operating Income ($B)': '{:.1f}',
-                    'Net Income ($B)': '{:.1f}',
-                    'Market Cap ($B)': '{:.1f}'
+                df_analysis.style.format({
+                    'Composite Score': '{:.1f}',
+                    'Valuation': '{:.1f}',
+                    'Quality': '{:.1f}',
+                    'Growth': '{:.1f}',
+                    'Financial Health': '{:.1f}',
+                    'Risk & Momentum': '{:.1f}'
                 }),
                 use_container_width=True
             )
             
-            # Individual company details
-            st.subheader("📈 Individual Company Details")
+            # Display individual company analysis
+            st.subheader("📊 Detailed Company Analysis")
             
-            for ticker, data in all_data.items():
-                company_info = data.get('company_info', {})
-                info = data.get('info', {})
+            for ticker, data in detailed_scores.items():
+                scores = data['scores']
+                company_info = data['company_info']
+                info = data['info']
                 
-                with st.expander(f"📊 {ticker} - {company_info.get('name', 'Unknown')}"):
+                signal, color = framework.get_signal(scores.composite)
+                
+                with st.expander(f"📈 {ticker} - {company_info.get('name', 'Unknown')} | {signal}"):
+                    # Composite Score and Signal
+                    col1, col2 = st.columns([1, 1])
+                    
+                    with col1:
+                        st.metric("Composite Score", f"{scores.composite:.1f}/100", 
+                                 delta=f"Signal: {signal.split()[0]}")
+                    
+                    with col2:
+                        st.metric("Sector", company_info.get('sector', 'N/A'))
+                    
+                    st.divider()
+                    
+                    # Five Lens Scores Visualization
+                    st.markdown("**Five-Lens Scores:**")
+                    col1, col2, col3, col4, col5 = st.columns(5)
+                    
+                    with col1:
+                        st.metric("Valuation", f"{scores.valuation:.1f}", delta="")
+                    with col2:
+                        st.metric("Quality", f"{scores.quality:.1f}", delta="")
+                    with col3:
+                        st.metric("Growth", f"{scores.growth:.1f}", delta="")
+                    with col4:
+                        st.metric("Financial Health", f"{scores.financial_health:.1f}", delta="")
+                    with col5:
+                        st.metric("Risk & Momentum", f"{scores.risk_momentum:.1f}", delta="")
+                    
+                    st.divider()
+                    
+                    # Key Financial Data
+                    st.markdown("**Key Financial Metrics:**")
                     col1, col2, col3, col4 = st.columns(4)
                     
                     with col1:
                         revenue = (info.get('totalRevenue', 0) or 0) / 1e9
-                        st.metric("Revenue", f"${revenue:.1f}B")
+                        st.metric("Revenue ($B)", f"${revenue:.1f}")
                     with col2:
-                        op_income = (info.get('operatingIncome', 0) or 0) / 1e9
-                        st.metric("Operating Income", f"${op_income:.1f}B")
-                    with col3:
-                        net_income = (info.get('netIncome', 0) or 0) / 1e9
-                        st.metric("Net Income", f"${net_income:.1f}B")
-                    with col4:
-                        market_cap = (info.get('marketCap', 0) or 0) / 1e9
-                        st.metric("Market Cap", f"${market_cap:.1f}B")
-                    
-                    # Additional metrics
-                    col1, col2, col3 = st.columns(3)
-                    
-                    with col1:
                         pe = info.get('trailingPE')
-                        if pe:
-                            st.metric("P/E Ratio", f"{pe:.2f}")
-                        else:
-                            st.metric("P/E Ratio", "N/A")
-                    
-                    with col2:
-                        pb = info.get('priceToBook')
-                        if pb:
-                            st.metric("P/B Ratio", f"{pb:.2f}")
-                        else:
-                            st.metric("P/B Ratio", "N/A")
-                    
+                        st.metric("P/E Ratio", f"{pe:.1f}" if pe else "N/A")
                     with col3:
-                        yield_val = info.get('dividendYield')
-                        if yield_val:
-                            st.metric("Dividend Yield", f"{yield_val*100:.2f}%")
+                        pb = info.get('priceToBook')
+                        st.metric("P/B Ratio", f"{pb:.1f}" if pb else "N/A")
+                    with col4:
+                        roe = info.get('returnOnEquity')
+                        if roe:
+                            st.metric("ROE", f"{roe*100:.1f}%")
                         else:
-                            st.metric("Dividend Yield", "N/A")
+                            st.metric("ROE", "N/A")
+                    
+                    # Investment Recommendation
+                    st.markdown(framework.generate_recommendation(scores, data['stock_data']))
     
     except Exception as e:
-        st.error(f"❌ Error loading financial data: {str(e)}")
+        st.error(f"❌ Error in financial analysis: {str(e)}")
         st.info("💡 Please try clicking 'Refresh Data' button in the sidebar")
 
 # ============================================================================
