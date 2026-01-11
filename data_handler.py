@@ -113,6 +113,41 @@ class DataFetcher:
             return drawdown.min()
         except:
             return 0.0
+    
+    @staticmethod
+    def calculate_beta(stock_returns, market_returns):
+        """
+        Calculate beta - systematic risk
+        
+        Args:
+            stock_returns (pd.Series): Daily stock returns
+            market_returns (pd.Series): Daily market returns
+        
+        Returns:
+            float: Beta value
+        """
+        try:
+            if len(stock_returns) < 2 or len(market_returns) < 2:
+                return 1.0
+            
+            # Align the series
+            aligned_stock = stock_returns[stock_returns.index.isin(market_returns.index)]
+            aligned_market = market_returns[market_returns.index.isin(stock_returns.index)]
+            
+            if len(aligned_stock) < 2:
+                return 1.0
+            
+            # Calculate covariance and variance
+            covariance = np.cov(aligned_stock, aligned_market)[0, 1]
+            market_variance = np.var(aligned_market)
+            
+            if market_variance == 0:
+                return 1.0
+            
+            beta = covariance / market_variance
+            return beta
+        except:
+            return 1.0
 
 
 # ============================================================================
