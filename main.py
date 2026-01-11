@@ -72,6 +72,12 @@ def get_stock_data(ticker, period="3y"):
 st.sidebar.markdown("### ⚙️ Settings")
 st.sidebar.markdown("---")
 
+# Refresh button
+if st.sidebar.button("🔄 Refresh Data", use_container_width=True):
+    st.rerun()
+
+st.sidebar.markdown("---")
+
 time_period = st.sidebar.radio(
     "📊 Select Data Period",
     ("1 Year", "2 Years", "3 Years"),
@@ -373,12 +379,17 @@ with tab4:
         all_data = fetch_all_company_data(period=selected_period)
         
         if all_data:
-            st.markdown("### Volatility Comparison")
+            # Volatility Comparison
+            st.markdown("### 📊 Volatility Comparison")
             
             volatility_data = {}
+            annual_returns_data = {}
+            sharpe_ratios = {}
+            max_drawdowns = {}
             
             for ticker, data in all_data.items():
                 price_data = data.get('price_data')
+                company_name = TICKERS.get(ticker, ticker)
                 
                 if price_data is not None and not price_data.empty:
                     try:
@@ -396,16 +407,60 @@ with tab4:
                         if not returns.empty:
                             volatility = DataFetcher.calculate_volatility(returns)
                             volatility_data[ticker] = volatility * 100
+                            annual_returns_data[ticker] = DataFetcher.calculate_annual_return(close_prices) * 100
+                            sharpe_ratios[ticker] = DataFetcher.calculate_sharpe_ratio(returns)
+                            max_drawdowns[ticker] = DataFetcher.calculate_max_drawdown(close_prices) * 100
                     except:
                         pass
             
+            # Display metrics
             if volatility_data:
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("Highest Volatility", 
+                             f"{max(volatility_data.values()):.2f}%",
+                             max(volatility_data, key=volatility_data.get))
+                
+                with col2:
+                    st.metric("Lowest Volatility",
+                             f"{min(volatility_data.values()):.2f}%",
+                             min(volatility_data, key=volatility_data.get))
+                
+                with col3:
+                    st.metric("Best Sharpe Ratio",
+                             f"{max(sharpe_ratios.values()):.2f}",
+                             max(sharpe_ratios, key=sharpe_ratios.get))
+                
+                with col4:
+                    st.metric("Best Annual Return",
+                             f"{max(annual_returns_data.values()):.2f}%",
+                             max(annual_returns_data, key=annual_returns_data.get))
+                
+                st.divider()
+                
+                # Volatility chart
                 vol_df = pd.DataFrame(list(volatility_data.items()), columns=['Company', 'Volatility (%)'])
                 vol_df = vol_df.sort_values('Volatility (%)', ascending=False)
                 
-                fig = go.Figure(data=[go.Bar(x=vol_df['Company'], y=vol_df['Volatility (%)'])])
+                fig = go.Figure(data=[go.Bar(x=vol_df['Company'], y=vol_df['Volatility (%)'],
+                                             marker_color=['#FF6B6B' if v > 30 else '#4ECDC4' 
+                                                          for v in vol_df['Volatility (%)']])])
                 fig.update_layout(title="Annual Volatility Comparison", height=400)
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
+                
+                st.divider()
+                
+                # Risk metrics table
+                st.markdown("### 📋 Comprehensive Risk Metrics")
+                risk_df = pd.DataFrame({
+                    'Company': volatility_data.keys(),
+                    'Volatility (%)': [f"{v:.2f}" for v in volatility_data.values()],
+                    'Annual Return (%)': [f"{annual_returns_data.get(t, 0):.2f}" for t in volatility_data.keys()],
+                    'Sharpe Ratio': [f"{sharpe_ratios.get(t, 0):.2f}" for t in volatility_data.keys()],
+                    'Max Drawdown (%)': [f"{max_drawdowns.get(t, 0):.2f}" for t in volatility_data.keys()]
+                })
+                st.dataframe(risk_df, use_container_width=True)
     
     except Exception as e:
         st.error(f"❌ Error in risk analysis: {str(e)}")
@@ -439,7 +494,64 @@ with tab5:
     4. **Data Sources**: Yahoo Finance and public company information
     
     ---
+    """)
     
+    try:
+        all_data = fetch_all_company_data(period=selected_period)
+        
+        if all_data:
+            st.markdown("### 📈 Performance Summary")
+            
+            summary_data = []
+            for ticker, data in all_data.items():
+                price_data = data.get('price_data')
+                company_name = TICKERS.get(ticker, ticker)
+                
+                if price_data is not None and not price_data.empty:
+                    try:
+                        if isinstance(price_data.columns, pd.MultiIndex):
+                            price_data.columns = price_data.columns.get_level_values(1)
+                        
+                        price_data.columns = price_data.columns.str.lower()
+                        
+                        if 'close' in price_data.columns:
+                            close_prices = price_data['close']
+                        else:
+                            close_prices = price_data.iloc[:, -1]
+                        
+                        returns = DataFetcher.calculate_returns(close_prices).dropna()
+                        if not returns.empty:
+                            annual_return = DataFetcher.calculate_annual_return(close_prices) * 100
+                            volatility = DataFetcher.calculate_volatility(returns) * 100
+                            sharpe = DataFetcher.calculate_sharpe_ratio(returns)
+                            
+                            summary_data.append({
+                                'Company': company_name,
+                                'Annual Return (%)': f"{annual_return:.2f}%",
+                                'Volatility (%)': f"{volatility:.2f}%",
+                                'Sharpe Ratio': f"{sharpe:.2f}"
+                            })
+                    except:
+                        pass
+            
+            if summary_data:
+                summary_df = pd.DataFrame(summary_data)
+                st.dataframe(summary_df, use_container_width=True)
+            
+            st.markdown("### 💡 Insights")
+            st.info("""
+            **This analysis covers:**
+            - 3-year historical data analysis
+            - Five-lens multi-dimensional evaluation
+            - Professional investment signals (Buy/Hold/Avoid)
+            - Risk-adjusted return metrics
+            - Volatility and drawdown analysis
+            """)
+    except:
+        st.warning("Summary data currently loading...")
+    
+    st.markdown("---")
+    st.markdown("""
     **For more information, visit The Mountain Path - World of Finance**
     
     Prof. V. Ravichandran
