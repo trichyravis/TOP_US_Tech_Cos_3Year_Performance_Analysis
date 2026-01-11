@@ -242,12 +242,12 @@ with tab2:
                     'Company': f"{ticker}",
                     'Name': company_info.get('name', 'Unknown'),
                     'Sector': company_info.get('sector', 'N/A'),
-                    'Composite Score': f"{lens_scores.composite:.1f}",
-                    'Valuation': f"{lens_scores.valuation:.1f}",
-                    'Quality': f"{lens_scores.quality:.1f}",
-                    'Growth': f"{lens_scores.growth:.1f}",
-                    'Financial Health': f"{lens_scores.financial_health:.1f}",
-                    'Risk & Momentum': f"{lens_scores.risk_momentum:.1f}",
+                    'Composite Score': lens_scores.composite,
+                    'Valuation': lens_scores.valuation,
+                    'Quality': lens_scores.quality,
+                    'Growth': lens_scores.growth,
+                    'Financial Health': lens_scores.financial_health,
+                    'Risk & Momentum': lens_scores.risk_momentum,
                 })
                 
                 detailed_scores[ticker] = {
@@ -261,17 +261,13 @@ with tab2:
             # Display Five-Lens Scores Summary
             st.subheader("🎯 Five-Lens Analysis Summary")
             df_analysis = pd.DataFrame(analysis_results)
-            st.dataframe(
-                df_analysis.style.format({
-                    'Composite Score': '{:.1f}',
-                    'Valuation': '{:.1f}',
-                    'Quality': '{:.1f}',
-                    'Growth': '{:.1f}',
-                    'Financial Health': '{:.1f}',
-                    'Risk & Momentum': '{:.1f}'
-                }),
-                use_container_width=True
-            )
+            
+            # Format numeric columns for display
+            for col in ['Composite Score', 'Valuation', 'Quality', 'Growth', 'Financial Health', 'Risk & Momentum']:
+                if col in df_analysis.columns:
+                    df_analysis[col] = df_analysis[col].apply(lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else x)
+            
+            st.dataframe(df_analysis, use_container_width=True)
             
             # Display individual company analysis
             st.subheader("📊 Detailed Company Analysis")
