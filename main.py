@@ -787,28 +787,14 @@ with tab5:
 
 st.markdown("---")
 
-# Narrow footer using very tight columns
-col1, col2, col3, col4, col5 = st.columns([1, 1.5, 1, 1.5, 1])
-
-with col2:
-    st.markdown("### 🏛️ THE MOUNTAIN PATH", unsafe_allow_html=False)
-    st.markdown("**Prof. V. Ravichandran**")
-    st.markdown("*28+ Years Finance | 10+ Years Academic*")
-    st.markdown("[🔗 LinkedIn](https://www.linkedin.com/in/trichyravis/) | [🐙 GitHub](https://github.com/trichyravis)")
-
-with col4:
-    st.markdown("")
-    st.markdown("")
-    st.markdown("*WORLD OF FINANCE*")
-    st.markdown("")
-    st.markdown("")
-
-st.markdown("")
-st.markdown("---")
-st.markdown("")
-
-# Disclaimer section - also narrower
+# Simple minimal footer
 col1, col2, col3 = st.columns([1, 2, 1])
+
 with col2:
-    st.warning("**DISCLAIMER**: Educational only. NOT financial advice. Consult a financial advisor. Past performance ≠ future results.")
-    st.markdown("<p style='text-align: center; font-size: 10px; color: gray;'>© 2024 The Mountain Path - World of Finance</p>", unsafe_allow_html=True)
+    st.markdown("**Prof. V. Ravichandran**")
+    st.markdown("[LinkedIn](https://www.linkedin.com/in/trichyravis/) | [GitHub](https://github.com/trichyravis)")
+
+st.markdown("")
+
+# Disclaimer section
+st.warning("**DISCLAIMER**: This tool is for educational purposes only. NOT financial advice. Consult a qualified financial advisor before making investment decisions. Past performance does not guarantee future results. This tool does not include taxes, fees, or transaction costs.")
