@@ -787,28 +787,28 @@ with tab5:
 
 st.markdown("---")
 
-# Simple footer using Streamlit containers
-with st.container():
-    col1, col2, col3 = st.columns([1, 2, 1])
-    
-    with col2:
-        st.markdown("### 🏛️ THE MOUNTAIN PATH - WORLD OF FINANCE", unsafe_allow_html=False)
-        st.markdown("**Prof. V. Ravichandran**")
-        st.markdown("*28+ Years Corporate Finance & Banking | 10+ Years Academic Excellence*")
-        
-        st.markdown("")
-        col_a, col_b = st.columns(2)
-        with col_a:
-            st.markdown("[🔗 LinkedIn Profile](https://www.linkedin.com/in/trichyravis/)")
-        with col_b:
-            st.markdown("[🐙 GitHub Profile](https://github.com/trichyravis)")
+# Narrow footer using very tight columns
+col1, col2, col3, col4, col5 = st.columns([1, 1.5, 1, 1.5, 1])
+
+with col2:
+    st.markdown("### 🏛️ THE MOUNTAIN PATH", unsafe_allow_html=False)
+    st.markdown("**Prof. V. Ravichandran**")
+    st.markdown("*28+ Years Finance | 10+ Years Academic*")
+    st.markdown("[🔗 LinkedIn](https://www.linkedin.com/in/trichyravis/) | [🐙 GitHub](https://github.com/trichyravis)")
+
+with col4:
+    st.markdown("")
+    st.markdown("")
+    st.markdown("*WORLD OF FINANCE*")
+    st.markdown("")
+    st.markdown("")
 
 st.markdown("")
 st.markdown("---")
 st.markdown("")
 
-# Disclaimer section
-st.warning("⚠️ **DISCLAIMER**: This tool is for educational purposes only. **NOT financial advice**. Always consult with a qualified financial advisor before making investment decisions. Past performance does not guarantee future results. This tool does not include taxes, fees, or transaction costs.")
-
-st.markdown("")
-st.markdown("<p style='text-align: center; font-size: 11px; color: gray;'>© 2024 The Mountain Path - World of Finance. All rights reserved.</p>", unsafe_allow_html=True)
+# Disclaimer section - also narrower
+col1, col2, col3 = st.columns([1, 2, 1])
+with col2:
+    st.warning("**DISCLAIMER**: Educational only. NOT financial advice. Consult a financial advisor. Past performance ≠ future results.")
+    st.markdown("<p style='text-align: center; font-size: 10px; color: gray;'>© 2024 The Mountain Path - World of Finance</p>", unsafe_allow_html=True)
