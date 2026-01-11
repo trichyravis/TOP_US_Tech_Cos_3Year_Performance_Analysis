@@ -89,17 +89,18 @@ st.markdown("""
 # HEADER
 # ============================================================================
 
-col1, col2, col3 = st.columns([1, 2, 1])
+# ============================================================================
+# HEADER
+# ============================================================================
 
-with col2:
-    st.markdown("""
-    <div style="background: linear-gradient(135deg, #003366 0%, #004d80 100%); 
-                padding: 30px; border-radius: 15px; text-align: center; margin: 20px 0;">
-        <h1 style="color: #FFD700; margin: 0;">THE MOUNTAIN PATH - WORLD OF FINANCE</h1>
-        <p style="color: white; font-size: 18px; margin: 10px 0;">Top US Tech Companies Performance Analysis</p>
-        <p style="color: #FFD700; font-size: 14px; margin: 0;">3-Year Rolling Window • Educational Purpose Only</p>
-    </div>
-    """, unsafe_allow_html=True)
+st.markdown("""
+<div style="background: linear-gradient(135deg, #003366 0%, #004d80 100%); 
+            padding: 20px 30px; border-radius: 10px; text-align: center; margin: 15px auto;">
+    <h1 style="color: #FFD700; margin: 5px 0; font-size: 36px;">THE MOUNTAIN PATH - WORLD OF FINANCE</h1>
+    <p style="color: white; font-size: 16px; margin: 8px 0;">Top US Tech Companies Performance Analysis</p>
+    <p style="color: #FFD700; font-size: 12px; margin: 0;">3-Year Rolling Window • Educational Purpose Only</p>
+</div>
+""", unsafe_allow_html=True)
 
 # ============================================================================
 # SIDEBAR
@@ -785,10 +786,52 @@ with tab5:
 # ============================================================================
 
 st.markdown("---")
-st.markdown("""
-<div style="text-align: center; color: #666; font-size: 12px; padding: 20px;">
-    <p><strong>The Mountain Path - World of Finance</strong></p>
-    <p>Prof. V. Ravichandran | 28+ Years Corporate Finance & Banking | 10+ Years Academic Excellence</p>
-    <p style="color: #999; margin-top: 10px;">Educational Purpose Only • Data from Yahoo Finance</p>
+
+footer_html = """
+<div style="background: linear-gradient(135deg, #003366 0%, #004d80 100%); 
+            padding: 30px; border-radius: 10px; margin-top: 30px;">
+    
+    <!-- Title -->
+    <p style="color: #FFD700; text-align: center; font-size: 16px; font-weight: bold; margin: 0 0 15px 0;">
+        THE MOUNTAIN PATH - WORLD OF FINANCE
+    </p>
+    
+    <!-- Author Info -->
+    <p style="color: white; text-align: center; font-size: 14px; margin: 5px 0;">
+        <strong>Prof. V. Ravichandran</strong>
+    </p>
+    <p style="color: #FFD700; text-align: center; font-size: 12px; margin: 0 0 15px 0;">
+        28+ Years Corporate Finance & Banking | 10+ Years Academic Excellence
+    </p>
+    
+    <!-- Contact Links -->
+    <p style="color: white; text-align: center; font-size: 12px; margin: 10px 0;">
+        <a href="https://www.linkedin.com/in/trichyravis/" target="_blank" style="color: #FFD700; text-decoration: none; font-weight: bold;">
+            LinkedIn Profile
+        </a> 
+        &nbsp;&nbsp;|&nbsp;&nbsp;
+        <a href="https://github.com/trichyravis" target="_blank" style="color: #FFD700; text-decoration: none; font-weight: bold;">
+            GitHub Profile
+        </a>
+    </p>
+    
+    <!-- Disclaimer -->
+    <div style="background: rgba(255, 215, 0, 0.1); border-left: 4px solid #FFD700; padding: 15px; margin-top: 15px; border-radius: 5px;">
+        <p style="color: #FFD700; font-weight: bold; margin: 0 0 8px 0; font-size: 12px;">
+            ⚠️ DISCLAIMER
+        </p>
+        <p style="color: white; font-size: 11px; margin: 0; line-height: 1.5;">
+            This tool is for <strong>educational purposes only</strong>. <strong>NOT financial advice</strong>. 
+            Always consult with a qualified financial advisor before making investment decisions. 
+            Past performance does not guarantee future results. This tool does not include taxes, fees, or transaction costs.
+        </p>
+    </div>
+    
+    <!-- Copyright -->
+    <p style="color: #FFD700; text-align: center; font-size: 11px; margin: 15px 0 0 0;">
+        © 2024 The Mountain Path - World of Finance. All rights reserved.
+    </p>
 </div>
-""", unsafe_allow_html=True)
+"""
+
+st.markdown(footer_html, unsafe_allow_html=True)
