@@ -301,12 +301,12 @@ with tab2:
                 
                 # Prepare risk metrics
                 risk_metrics_eval = {
-                    'beta': DataFetcher.STOCK_BETA.get(ticker, 1.0),
-                    'volatility_252d': 0.25,  # Default, can be calculated from price_data
-                    'sharpe_ratio': 0.8,  # Default
+                    'beta': 1.0,  # Default beta, can calculate from correlation with market
+                    'volatility_252d': 0.25,  # Default, will be calculated from price_data
+                    'sharpe_ratio': 0.8,  # Default, will be calculated
                 }
                 
-                # Calculate volatility from price data if available
+                # Calculate volatility and beta from price data if available
                 if price_data is not None and not price_data.empty:
                     cols = price_data.columns.str.lower()
                     price_data.columns = cols
@@ -314,6 +314,19 @@ with tab2:
                     if not returns.empty:
                         risk_metrics_eval['volatility_252d'] = DataFetcher.calculate_volatility(returns)
                         risk_metrics_eval['sharpe_ratio'] = DataFetcher.calculate_sharpe_ratio(returns)
+                        
+                        # Calculate beta against market if possible
+                        try:
+                            market_data = fetch_market_data(period=selected_period)
+                            if market_data is not None and not market_data.empty:
+                                cols_market = market_data.columns.str.lower()
+                                market_data.columns = cols_market
+                                market_returns = DataFetcher.calculate_returns(market_data['close']).dropna()
+                                if not market_returns.empty:
+                                    beta = DataFetcher.calculate_beta(returns, market_returns)
+                                    risk_metrics_eval['beta'] = beta
+                        except:
+                            pass  # Use default beta if calculation fails
                 
                 # Evaluate using Five-Lens Framework
                 lens_scores = framework.evaluate_stock(stock_data_eval, financial_metrics_eval, risk_metrics_eval)
