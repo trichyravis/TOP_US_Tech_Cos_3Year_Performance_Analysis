@@ -109,7 +109,7 @@ st.markdown("""
 with st.sidebar:
     st.markdown("### 🔧 Controls")
     
-    if st.button("🔄 Refresh Data", use_container_width=True):
+    if st.button("🔄 Refresh Data", width="stretch"):
         st.cache_data.clear()
         st.rerun()
     
@@ -415,7 +415,7 @@ with tab2:
                 if col in df_analysis.columns:
                     df_analysis[col] = df_analysis[col].apply(lambda x: f"{x:.1f}" if isinstance(x, (int, float)) else x)
             
-            st.dataframe(df_analysis, use_container_width=True)
+            st.dataframe(df_analysis, width="stretch")
             
             # Display individual company analysis
             st.subheader("📊 Detailed Company Analysis")
@@ -588,7 +588,7 @@ with tab3:
                                 hovermode="x unified"
                             )
                             
-                            st.plotly_chart(fig, use_container_width=True)
+                            st.plotly_chart(fig, width="stretch")
                         else:
                             st.warning(f"Missing required columns for {ticker}: {price_data.columns.tolist()}")
                     else:
@@ -638,7 +638,7 @@ with tab3:
                     showlegend=False
                 )
                 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
             
             # Volatility comparison
             st.subheader("📈 Volatility Comparison")
@@ -672,7 +672,7 @@ with tab3:
                     showlegend=False
                 )
                 
-                st.plotly_chart(fig, use_container_width=True)
+                st.plotly_chart(fig, width="stretch")
     
     except Exception as e:
         st.error(f"❌ Error in market analysis: {str(e)}")
@@ -818,7 +818,7 @@ with tab4:
                 # Risk Metrics Dashboard
                 st.subheader("🎯 Risk Metrics Dashboard")
                 df_risk = pd.DataFrame(risk_data)
-                st.dataframe(df_risk, use_container_width=True, hide_index=True)
+                st.dataframe(df_risk, width="stretch", hide_index=True)
                 
                 st.divider()
                 
@@ -868,7 +868,7 @@ with tab4:
                         barmode='group',
                         hovermode='x unified'
                     )
-                    st.plotly_chart(fig_var, use_container_width=True)
+                    st.plotly_chart(fig_var, width="stretch")
                 
                 with col2:
                     st.markdown("**Conditional VAR (CVAR) - All Confidence Levels**")
@@ -900,7 +900,7 @@ with tab4:
                         barmode='group',
                         hovermode='x unified'
                     )
-                    st.plotly_chart(fig_cvar, use_container_width=True)
+                    st.plotly_chart(fig_cvar, width="stretch")
                 
                 st.divider()
                 
