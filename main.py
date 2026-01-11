@@ -810,9 +810,9 @@ with col2:
     </div>
     """, unsafe_allow_html=True)
 
-# Disclaimer section
+# Disclaimer section with bright blue background
 st.markdown("""
-<div style="background: rgba(0, 51, 102, 0.3); border-left: 4px solid #FFD700; padding: 15px; margin: 20px 0; border-radius: 5px;">
+<div style="background: #1E5A96; border-left: 4px solid #FFD700; padding: 15px; margin: 20px 0; border-radius: 5px;">
     <p style="color: #FFD700; font-weight: bold; margin: 0 0 8px 0; font-size: 12px;">
         DISCLAIMER
     </p>
