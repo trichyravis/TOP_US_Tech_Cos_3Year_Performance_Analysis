@@ -17,6 +17,7 @@ import numpy as np
 import yfinance as yf
 import plotly.graph_objects as go
 from datetime import datetime, timedelta
+import traceback
 
 # ============================================================================
 # PAGE CONFIG
@@ -327,44 +328,120 @@ with tab3:
         all_data = fetch_all_company_data(period=selected_period)
         
         if all_data:
-            # Candlestick charts
-            st.subheader("📉 Candlestick Charts")
+            # Create tabs for candlestick charts
+            st.markdown("### 📉 Candlestick Charts (3-Year History)")
             
+            chart_tabs = st.tabs(["NVDA - NVIDIA", "MSFT - Microsoft", "AAPL - Apple", "GOOGL - Alphabet", "AMZN - Amazon"])
+            
+            ticker_list = list(all_data.keys())
+            
+            for idx, tab_container in enumerate(chart_tabs):
+                if idx < len(ticker_list):
+                    ticker = ticker_list[idx]
+                    data = all_data[ticker]
+                    
+                    with tab_container:
+                        price_data = data.get('price_data')
+                        company_info = data.get('company_info', {})
+                        company_name = TICKERS.get(ticker, company_info.get('longName', ticker))
+                        
+                        if price_data is not None and not price_data.empty:
+                            try:
+                                # Make a copy to avoid SettingWithCopyWarning
+                                price_data_copy = price_data.copy()
+                                
+                                # Handle MultiIndex
+                                if isinstance(price_data_copy.columns, pd.MultiIndex):
+                                    price_data_copy.columns = price_data_copy.columns.get_level_values(1)
+                                
+                                # Convert column names to lowercase
+                                price_data_copy.columns = price_data_copy.columns.str.lower()
+                                
+                                # Check for required columns
+                                required_cols = ['open', 'high', 'low', 'close']
+                                missing_cols = [col for col in required_cols if col not in price_data_copy.columns]
+                                
+                                if missing_cols:
+                                    # Try alternative column names
+                                    cols_available = list(price_data_copy.columns)
+                                    st.info(f"📊 {ticker} - {company_name}")
+                                    st.warning(f"Missing OHLC columns. Available: {cols_available}")
+                                else:
+                                    # Create candlestick chart
+                                    fig = go.Figure(data=[go.Candlestick(
+                                        x=price_data_copy.index,
+                                        open=price_data_copy['open'],
+                                        high=price_data_copy['high'],
+                                        low=price_data_copy['low'],
+                                        close=price_data_copy['close']
+                                    )])
+                                    
+                                    fig.update_layout(
+                                        title=f"{ticker} - {company_name} (3-Year Candlestick Chart)",
+                                        yaxis_title="Price ($)",
+                                        xaxis_title="Date",
+                                        template="plotly_white",
+                                        height=500,
+                                        hovermode="x unified"
+                                    )
+                                    
+                                    st.plotly_chart(fig, width="stretch")
+                            except Exception as e:
+                                st.error(f"❌ Error displaying chart for {ticker}: {str(e)}")
+                        else:
+                            st.warning(f"❌ No price data available for {ticker}")
+            
+            st.divider()
+            
+            # Annual returns comparison
+            st.markdown("### 📊 Annual Returns Comparison")
+            
+            returns_data = {}
             for ticker, data in all_data.items():
                 price_data = data.get('price_data')
-                company_info = data.get('company_info', {})
-                company_name = TICKERS.get(ticker, company_info.get('longName', ticker))
                 
                 if price_data is not None and not price_data.empty:
                     try:
-                        # Handle MultiIndex
-                        if isinstance(price_data.columns, pd.MultiIndex):
-                            price_data.columns = price_data.columns.get_level_values(1)
+                        price_data_copy = price_data.copy()
                         
-                        price_data.columns = price_data.columns.str.lower()
+                        if isinstance(price_data_copy.columns, pd.MultiIndex):
+                            price_data_copy.columns = price_data_copy.columns.get_level_values(1)
                         
-                        if all(col in price_data.columns for col in ['open', 'high', 'low', 'close']):
-                            fig = go.Figure(data=[go.Candlestick(
-                                x=price_data.index,
-                                open=price_data['open'],
-                                high=price_data['high'],
-                                low=price_data['low'],
-                                close=price_data['close']
-                            )])
-                            
-                            fig.update_layout(
-                                title=f"{ticker} - {company_name}",
-                                yaxis_title="Price ($)",
-                                template="plotly_white",
-                                height=400
-                            )
-                            
-                            st.plotly_chart(fig, use_container_width=True)
+                        price_data_copy.columns = price_data_copy.columns.str.lower()
+                        
+                        if 'close' in price_data_copy.columns:
+                            close_prices = price_data_copy['close']
+                        elif 'adj close' in price_data_copy.columns:
+                            close_prices = price_data_copy['adj close']
+                        else:
+                            close_prices = price_data_copy.iloc[:, -1]
+                        
+                        annual_return = DataFetcher.calculate_annual_return(close_prices)
+                        returns_data[ticker] = annual_return * 100
                     except:
-                        st.warning(f"Could not display chart for {ticker}")
+                        returns_data[ticker] = 0.0
+            
+            if returns_data:
+                fig_returns = go.Figure()
+                fig_returns.add_trace(go.Bar(
+                    x=list(returns_data.keys()),
+                    y=list(returns_data.values()),
+                    marker_color=['#4CAF50' if v > 0 else '#F44336' for v in returns_data.values()]
+                ))
+                fig_returns.update_layout(
+                    title="3-Year Annualized Returns",
+                    xaxis_title="Company",
+                    yaxis_title="Return (%)",
+                    template="plotly_white",
+                    height=400
+                )
+                st.plotly_chart(fig_returns, width="stretch")
+        else:
+            st.error("❌ Could not fetch market data")
     
     except Exception as e:
         st.error(f"❌ Error in market analysis: {str(e)}")
+        st.info(f"Debug: {traceback.format_exc()}")
 
 # ============================================================================
 # TAB 4: RISK ANALYSIS
