@@ -189,6 +189,48 @@ with tab1:
 with tab2:
     st.subheader("💰 Financial Performance - All TOP US Tech Companies")
     
+    st.markdown("""
+    ### 📊 Five-Lens Financial Framework Analysis
+    
+    This comprehensive analysis evaluates each company across 5 critical dimensions:
+    
+    **1. Valuation Lens (20% weight)**
+    - P/E Ratio: Price relative to earnings
+    - P/B Ratio: Price relative to book value
+    - P/S Ratio: Price relative to sales
+    - Dividend Yield: Annual dividend return
+    
+    **2. Quality Lens (25% weight)**
+    - ROE (Return on Equity): Profitability for shareholders
+    - Net Profit Margin: Operational efficiency
+    - ROIC (Return on Invested Capital): Capital effectiveness
+    - ROA (Return on Assets): Asset utilization
+    
+    **3. Growth Lens (20% weight)**
+    - Revenue Growth YoY: Sales expansion
+    - Earnings Growth YoY: Profit expansion
+    - PEG Ratio: Growth-adjusted valuation
+    
+    **4. Financial Health Lens (20% weight)**
+    - Debt-to-Equity Ratio: Leverage levels
+    - Current Ratio: Short-term solvency
+    - Interest Coverage: Debt servicing ability
+    - Free Cash Flow: Cash generation
+    
+    **5. Risk & Momentum Lens (15% weight)**
+    - Beta: Systematic risk vs market
+    - Volatility: Price fluctuation
+    - Sharpe Ratio: Risk-adjusted returns
+    - 52-Week Price Momentum: Recent performance
+    
+    **Composite Score (0-100):**
+    - 85+: 🚀 Strong Buy
+    - 75-84: ✅ Buy
+    - 65-74: 🟡 Hold/Accumulate
+    - 50-64: ⚠️ Watch
+    - <50: 🔴 Avoid
+    """)
+    
     st.info("📊 Analyzing all 5 companies using Five-Lens Framework...")
     
     try:
@@ -361,6 +403,50 @@ with tab2:
 with tab3:
     st.subheader("📈 Market Analysis - All TOP US Tech Companies")
     
+    st.markdown("""
+    ### 📊 Three-Year Market Performance Analysis
+    
+    This section provides comprehensive market analysis across multiple dimensions:
+    
+    **Candlestick Charts (3-Year History)**
+    - Daily OHLC (Open, High, Low, Close) data
+    - Visual price trends and volatility
+    - Support and resistance levels
+    - Seasonal patterns identification
+    
+    **Key Metrics Analyzed:**
+    
+    **Price Performance:**
+    - Current vs. historical prices
+    - Price momentum trends
+    - Support/resistance levels
+    - Trend identification (uptrend, downtrend, sideways)
+    
+    **Returns Analysis:**
+    - 3-Year Annualized Returns: Total return over 3 years
+    - Daily Returns: Volatility and price changes
+    - YTD (Year-to-Date) performance
+    - Quarterly performance trends
+    
+    **Volatility Metrics:**
+    - Historical Volatility: Price fluctuation magnitude
+    - Implied Volatility: Market expectations
+    - Volatility Ranking: Relative risk comparison
+    - Beta: Systematic risk vs. S&P 500
+    
+    **Technical Indicators:**
+    - Moving Averages: 50-day, 200-day trends
+    - Volume Analysis: Liquidity and conviction
+    - Price Action Patterns: Trading signals
+    - Support/Resistance Zones: Key price levels
+    
+    **Market Context:**
+    - S&P 500 Comparison: Relative market performance
+    - Sector Performance: Technology sector trends
+    - Economic Indicators: Macroeconomic context
+    - Correlation Matrix: Stock relationship analysis
+    """)
+    
     st.info("📊 Analyzing all 5 companies: NVDA, MSFT, AAPL, GOOGL, AMZN")
     
     try:
@@ -487,6 +573,57 @@ with tab3:
 
 with tab4:
     st.subheader("⚠️ Risk Analysis - All TOP US Tech Companies")
+    
+    st.markdown("""
+    ### 📊 Comprehensive Risk Management Framework
+    
+    This section analyzes financial and market risks using professional risk metrics:
+    
+    **Value at Risk (VAR) - Three Confidence Levels**
+    
+    VAR 90%: Maximum expected loss with 90% confidence (10% probability of worse loss)
+    VAR 95%: Maximum expected loss with 95% confidence (5% probability of worse loss)
+    VAR 99%: Maximum expected loss with 99% confidence (1% probability of worse loss)
+    
+    Example: "VAR 95% = -3.5%" means worst daily loss expected 95% of the time is 3.5%
+    
+    **Conditional Value at Risk (CVAR) - Expected Shortfall**
+    
+    CVAR shows expected loss WHEN VAR threshold is breached
+    - More conservative than VAR
+    - Shows tail risk
+    - Critical for extreme loss scenarios
+    
+    **Volatility Analysis**
+    - Historical Volatility: Past price fluctuations
+    - Annualized Volatility: 252-trading-day standard deviation
+    - Volatility Clustering: Periods of high/low volatility
+    - Volatility Mean Reversion: Return to average levels
+    
+    **Risk-Adjusted Returns**
+    - Sharpe Ratio: Return per unit of volatility risk
+    - Sortino Ratio: Return per unit of downside risk only
+    - Information Ratio: Return vs. benchmark
+    - Treynor Ratio: Return per unit of systematic risk
+    
+    **Drawdown Analysis**
+    - Maximum Drawdown: Largest peak-to-trough decline
+    - Recovery Time: Days to recover from drawdown
+    - Drawdown Duration: Length of decline period
+    - Recovery Trend: Recovery strength
+    
+    **Financial Risk Metrics**
+    - Debt-to-Equity: Leverage risk
+    - Interest Coverage: Default risk
+    - Liquidity Ratios: Solvency risk
+    - Cash Flow Risk: Operating risk
+    
+    **Systematic vs Idiosyncratic Risk**
+    - Beta: Market risk exposure
+    - Alpha: Excess returns
+    - R-Squared: Explanatory power
+    - Correlation: Diversification benefit
+    """)
     
     st.info("📊 Analyzing risk metrics for all 5 companies at multiple confidence levels")
     
@@ -741,21 +878,60 @@ with tab4:
 with tab5:
     st.subheader("📊 Summary & Key Insights")
     
+    st.markdown("""
+    ### 🎓 About This Educational Platform
+    
+    **The Mountain Path - World of Finance** provides comprehensive analysis of 
+    the top 5 US Technology companies using professional investment frameworks.
+    
+    ### 📊 Analytical Framework
+    
+    **1. Financial Performance Analysis**
+    - Five-Lens Framework evaluates companies across 5 dimensions
+    - Composite scoring from 0-100
+    - Investment signals from Strong Buy to Avoid
+    - Detailed metric breakdowns
+    
+    **2. Market Analysis**
+    - 3-year candlestick price charts
+    - Technical indicators and patterns
+    - Volume analysis
+    - Performance trends
+    
+    **3. Risk Management**
+    - Value at Risk (VAR) calculations
+    - Conditional VAR (Expected Shortfall)
+    - Volatility and drawdown analysis
+    - Risk-adjusted return metrics
+    
+    **4. Educational Metrics**
+    - Sharpe Ratio: Risk-adjusted returns
+    - Sortino Ratio: Downside risk penalization
+    - Beta: Systematic risk
+    - Maximum Drawdown: Largest losses
+    
+    ### 💡 Key Insights
+    
+    **Technology Sector Overview:**
+    - NVDA: Semiconductor/AI leadership
+    - MSFT: Cloud & Enterprise software
+    - AAPL: Consumer electronics ecosystem
+    - GOOGL: Search & Digital advertising
+    - AMZN: E-commerce & Cloud services
+    
+    **Data Quality:**
+    - Source: Yahoo Finance (Industry standard)
+    - Period: 3-year rolling window
+    - Frequency: Daily OHLCV data
+    - Quality: Adjusted for splits/dividends
+    
+    ### 📈 Performance Metrics
+    """)
+    
     try:
         all_data = fetch_all_company_data()
         
         if all_data:
-            st.markdown("""
-            ### 🏆 Key Highlights
-            
-            - **Data Source**: Yahoo Finance (yfinance)
-            - **Time Period**: 3 Years of daily price data
-            - **Companies Analyzed**: 5 Top US Tech Companies
-            - **Metrics**: Returns, Volatility, Risk, Financial Metrics
-            
-            ### 📈 Performance Snapshot
-            """)
-            
             col1, col2, col3, col4, col5 = st.columns(5)
             
             companies = ['NVDA', 'MSFT', 'AAPL', 'GOOGL', 'AMZN']
@@ -777,6 +953,48 @@ with tab5:
                                 f"{annual_return*100:.1f}%",
                                 delta=f"{annual_return*100:.1f}%"
                             )
+            
+            st.markdown("""
+            ### 📚 Educational Value
+            
+            **For Students Learning:**
+            - Financial statement analysis
+            - Risk management frameworks
+            - Investment valuation methods
+            - Quantitative finance techniques
+            - Portfolio management concepts
+            
+            **For Professionals:**
+            - Benchmark comparison
+            - Relative valuation analysis
+            - Risk assessment tools
+            - Performance tracking
+            - Decision support
+            
+            ### ⚠️ Important Disclaimers
+            
+            ✅ **Educational Purpose Only** - This tool is for learning
+            ✅ **NOT Financial Advice** - Consult qualified advisors
+            ✅ **Past Performance** - Does not guarantee future results
+            ✅ **Simplified Models** - Real analysis requires more data
+            ✅ **Market Risks** - All investments carry risk
+            
+            ### 🔍 How to Use This Platform
+            
+            1. **About Tab**: Understand platform capabilities
+            2. **Financial Performance**: Evaluate company quality
+            3. **Market Analysis**: Study price trends and charts
+            4. **Risk Analysis**: Understand downside scenarios
+            5. **Summary**: Review key metrics and insights
+            
+            ### 📖 Further Learning
+            
+            - Study the Five-Lens Framework methodology
+            - Understand each risk metric in depth
+            - Compare companies across dimensions
+            - Practice valuation techniques
+            - Build investment decision skills
+            """)
     
     except Exception as e:
         st.error(f"Error generating summary: {str(e)}")
