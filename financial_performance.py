@@ -2,8 +2,8 @@
 """
 ═══════════════════════════════════════════════════════════════════════════════
 THE MOUNTAIN PATH - WORLD OF FINANCE
-Five-Lens Framework for Stock Analysis
-Advanced Scoring Model with Risk Metrics
+Top US Tech Companies - 3 Year Performance Analysis
+Five-Lens Framework Financial Evaluation
 ═══════════════════════════════════════════════════════════════════════════════
 
 Prof. V. Ravichandran
@@ -11,878 +11,698 @@ Prof. V. Ravichandran
 10+ Years Academic Excellence
 """
 
-import numpy as np
+import streamlit as st
 import pandas as pd
-from dataclasses import dataclass
-from typing import Dict, Tuple, Optional
-import warnings
-warnings.filterwarnings('ignore')
+import numpy as np
+import yfinance as yf
+import plotly.graph_objects as go
+from datetime import datetime, timedelta
+import traceback
 
+# ============================================================================
+# PAGE CONFIG
+# ============================================================================
 
-@dataclass
-class LensScores:
-    """Container for five-lens scores"""
-    valuation: float
-    quality: float
-    growth: float
-    financial_health: float
-    risk_momentum: float
-    composite: float
+st.set_page_config(
+    page_title="The Mountain Path - Top US Tech Analysis",
+    page_icon="📊",
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
+
+# ============================================================================
+# IMPORTS
+# ============================================================================
+
+try:
+    from financial_performance import FiveLensFramework
+    from data_handler import DataFetcher, fetch_all_company_data, fetch_market_data
+    FRAMEWORK_AVAILABLE = True
+except:
+    FRAMEWORK_AVAILABLE = False
+
+# ============================================================================
+# DATA
+# ============================================================================
+
+TICKERS = {
+    'NVDA': 'NVIDIA',
+    'MSFT': 'Microsoft',
+    'AAPL': 'Apple',
+    'GOOGL': 'Alphabet',
+    'AMZN': 'Amazon'
+}
+
+# ============================================================================
+# HELPER FUNCTIONS
+# ============================================================================
+
+@st.cache_data(ttl=3600)
+def get_stock_data(ticker, period="3y"):
+    """Fetch stock data from yfinance"""
+    try:
+        data = yf.download(ticker, period=period, progress=False)
+        return data
+    except:
+        return None
+
+# ============================================================================
+# SIDEBAR
+# ============================================================================
+
+st.sidebar.markdown("### ⚙️ Settings")
+st.sidebar.markdown("---")
+
+# Refresh button
+if st.sidebar.button("🔄 Refresh Data", use_container_width=True):
+    st.rerun()
+
+st.sidebar.markdown("---")
+
+time_period = st.sidebar.radio(
+    "📊 Select Data Period",
+    ("1 Year", "2 Years", "3 Years"),
+    index=2
+)
+
+period_map = {"1 Year": "1y", "2 Years": "2y", "3 Years": "3y"}
+selected_period = period_map[time_period]
+
+st.sidebar.info(f"📊 Analyzing {time_period} of data")
+
+# ============================================================================
+# MAIN CONTENT
+# ============================================================================
+
+st.title("📊 THE MOUNTAIN PATH - WORLD OF FINANCE")
+st.markdown("## Top US Tech Companies - 3 Year Performance Analysis")
+st.markdown("---")
+
+# Create tabs
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "📖 About",
+    "💰 Financial Performance",
+    "📈 Market Analysis",
+    "⚠️  Risk Analysis",
+    "📋 Summary"
+])
+
+# ============================================================================
+# TAB 1: ABOUT
+# ============================================================================
+
+with tab1:
+    st.markdown("""
+    ### 🎯 Platform Overview
     
-    def to_dict(self):
-        """Convert to dictionary"""
-        return {
-            'Valuation Lens': self.valuation,
-            'Quality Lens': self.quality,
-            'Growth Lens': self.growth,
-            'Financial Health Lens': self.financial_health,
-            'Risk & Momentum Lens': self.risk_momentum,
-            'Composite Score': self.composite
-        }
+    **The Mountain Path - World of Finance** is an educational platform providing
+    comprehensive financial analysis of top US technology companies.
+    
+    #### 📊 Technology Sector Analysis
+    
+    This platform analyzes the following companies:
+    - **NVDA** - NVIDIA: Leading AI and GPU semiconductor company
+    - **MSFT** - Microsoft: Cloud computing and enterprise software leader
+    - **AAPL** - Apple: Consumer electronics and ecosystem innovator
+    - **GOOGL** - Alphabet: Search, advertising, and cloud services
+    - **AMZN** - Amazon: E-commerce and cloud infrastructure provider
+    
+    #### 🔍 Analysis Framework
+    
+    We use a comprehensive **Five-Lens Financial Analysis Framework**:
+    
+    1. **Valuation Lens (20%)** - P/E, P/B, P/S ratios and dividend yield
+    2. **Quality Lens (25%)** - ROE, profit margins, ROIC, and asset returns
+    3. **Growth Lens (20%)** - Revenue and earnings growth rates
+    4. **Financial Health (20%)** - Leverage, liquidity, and cash flow metrics
+    5. **Risk & Momentum (15%)** - Volatility, beta, Sharpe ratio, and price momentum
+    
+    Each metric is scored 0-100, and companies receive investment signals:
+    - 🚀 **Strong Buy** (85+)
+    - ✅ **Buy** (75-84)
+    - 🟡 **Hold** (65-74)
+    - ⚠️ **Watch** (50-64)
+    - 🔴 **Avoid** (<50)
+    
+    #### 📊 Data Sources
+    
+    - **Price Data**: Yahoo Finance (3-year daily OHLCV)
+    - **Financial Metrics**: Yahoo Finance and company filings
+    - **Market Data**: S&P 500 index for comparison
+    
+    #### ⚠️ Important Disclaimer
+    
+    This analysis is **for educational purposes only** and should not be considered
+    investment advice. Past performance does not guarantee future results. Always
+    conduct your own research and consult a qualified financial advisor before
+    making investment decisions.
+    
+    ---
+    
+    **Prof. V. Ravichandran**
+    - 28+ Years Corporate Finance & Banking Experience
+    - 10+ Years Academic Excellence
+    """)
 
+# ============================================================================
+# TAB 2: FINANCIAL PERFORMANCE
+# ============================================================================
 
-class FiveLensFramework:
-    """
-    Advanced Five-Lens Framework for stock analysis
-    Each lens evaluated on 0-100 scale
-    Composite score uses sector-adjusted weighting
-    """
-
-    def __init__(self, sector_weights: Optional[Dict] = None):
-        """
-        Initialize framework with optional custom weights
-        
-        Default weights: Equal 20% each
-        Can be overridden by sector characteristics
-        """
-        self.default_weights = {
-            'valuation': 0.20,
-            'quality': 0.25,
-            'growth': 0.20,
-            'financial_health': 0.20,
-            'risk_momentum': 0.15
-        }
-        
-        self.sector_weights = sector_weights or {}
-        
-    def evaluate_stock(self, stock_data: Dict, financial_metrics: Dict, 
-                      risk_metrics: Dict, peer_data: Optional[Dict] = None) -> LensScores:
-        """
-        Comprehensive stock evaluation using Five-Lens Framework
-        
-        Parameters:
-        -----------
-        stock_data : Dict
-            Live stock data (price, P/E, P/B, market cap, dividend yield, etc.)
-        financial_metrics : Dict
-            Financial metrics (D/E, current ratio, ROE, NPM, etc.)
-        risk_metrics : Dict
-            Risk metrics (beta, volatility, var_95, sharpe_ratio, etc.)
-        peer_data : Optional[Dict]
-            Peer comparison data for sector benchmarking
+with tab2:
+    st.subheader("💰 Financial Performance Analysis")
+    
+    st.info("📊 Analyzing all 5 companies using Five-Lens Framework...")
+    
+    if not FRAMEWORK_AVAILABLE:
+        st.error("❌ Five-Lens Framework not available. Please check dependencies.")
+    else:
+        try:
+            # Fetch all company data
+            all_data = fetch_all_company_data(period=selected_period)
             
-        Returns:
-        --------
-        LensScores
-            Scores for each lens and composite score
-        """
+            if not all_data:
+                st.error("❌ Could not fetch financial data")
+            else:
+                framework = FiveLensFramework()
+                analysis_results = []
+                detailed_scores = {}
+                
+                # Analyze each company
+                for ticker, data in all_data.items():
+                    try:
+                        company_info = data.get('company_info', {})
+                        price_data = data.get('price_data')
+                        
+                        # Get company name from TICKERS mapping or yfinance
+                        company_name = TICKERS.get(ticker, company_info.get('longName', company_info.get('shortName', 'Unknown')))
+                        
+                        # Initialize metrics with defaults
+                        stock_data_eval = {
+                            'pe_ratio': 20.0,
+                            'pb_ratio': 3.0,
+                            'ps_ratio': 2.0,
+                            'dividend_yield': 0.02,
+                            'sector': company_info.get('sector', 'Technology'),
+                            'price_momentum_52w': 0.25,
+                        }
+                        
+                        financial_metrics_eval = {
+                            'roe': 0.20,
+                            'npm': 0.15,
+                            'roa': 0.10,
+                            'roic': 0.15,
+                            'debt_to_equity': 0.5,
+                            'current_ratio': 2.0,
+                            'interest_coverage': 10.0,
+                            'free_cash_flow': 1000000000,
+                            'revenue_growth_yoy': 0.10,
+                            'earnings_growth_yoy': 0.15,
+                            'peg_ratio': 1.0,
+                        }
+                        
+                        # Try to get actual values from yfinance
+                        if 'trailingPE' in company_info:
+                            stock_data_eval['pe_ratio'] = company_info['trailingPE']
+                        if 'priceToBook' in company_info:
+                            stock_data_eval['pb_ratio'] = company_info['priceToBook']
+                        if 'returnOnEquity' in company_info:
+                            financial_metrics_eval['roe'] = company_info['returnOnEquity']
+                        if 'profitMargins' in company_info:
+                            financial_metrics_eval['npm'] = company_info['profitMargins']
+                        
+                        # Calculate risk metrics from price data
+                        risk_metrics_eval = {
+                            'beta': 1.2,
+                            'volatility_252d': 0.25,
+                            'sharpe_ratio': 0.8,
+                        }
+                        
+                        if price_data is not None and not price_data.empty:
+                            try:
+                                # Handle MultiIndex columns
+                                if isinstance(price_data.columns, pd.MultiIndex):
+                                    price_data.columns = price_data.columns.get_level_values(1)
+                                
+                                price_data.columns = price_data.columns.str.lower()
+                                
+                                if 'close' in price_data.columns:
+                                    close_prices = price_data['close']
+                                else:
+                                    close_prices = price_data.iloc[:, -1]
+                                
+                                returns = DataFetcher.calculate_returns(close_prices).dropna()
+                                if not returns.empty:
+                                    risk_metrics_eval['volatility_252d'] = DataFetcher.calculate_volatility(returns)
+                                    risk_metrics_eval['sharpe_ratio'] = DataFetcher.calculate_sharpe_ratio(returns)
+                            except:
+                                pass
+                        
+                        # Evaluate using Five-Lens Framework
+                        lens_scores = framework.evaluate_stock(stock_data_eval, financial_metrics_eval, risk_metrics_eval)
+                        
+                        analysis_results.append({
+                            'Company': ticker,
+                            'Name': company_name,
+                            'Composite Score': f"{lens_scores.composite:.1f}",
+                            'Valuation': f"{lens_scores.valuation:.1f}",
+                            'Quality': f"{lens_scores.quality:.1f}",
+                            'Growth': f"{lens_scores.growth:.1f}",
+                            'Health': f"{lens_scores.financial_health:.1f}",
+                            'Risk': f"{lens_scores.risk_momentum:.1f}",
+                        })
+                        
+                        detailed_scores[ticker] = {
+                            'scores': lens_scores,
+                            'company_info': company_info,
+                            'stock_data': stock_data_eval
+                        }
+                    except Exception as e:
+                        st.warning(f"⚠️ Error analyzing {ticker}: {str(e)}")
+                
+                # Display results
+                if analysis_results:
+                    st.markdown("### 🎯 Five-Lens Analysis Summary")
+                    results_df = pd.DataFrame(analysis_results)
+                    st.dataframe(results_df, use_container_width=True)
+                    
+                    st.markdown("### 📊 Detailed Company Analysis")
+                    
+                    for ticker, data_dict in detailed_scores.items():
+                        scores = data_dict['scores']
+                        company_info = data_dict['company_info']
+                        
+                        company_name = company_info.get('longName', company_info.get('shortName', 'Unknown'))
+                        signal, _ = framework.get_signal(scores.composite)
+                        
+                        with st.expander(f"📈 {ticker} - {company_name} | {signal}"):
+                            col1, col2 = st.columns(2)
+                            
+                            with col1:
+                                st.metric("Composite Score", f"{scores.composite:.1f}/100")
+                                st.metric("Valuation Lens", f"{scores.valuation:.1f}")
+                                st.metric("Quality Lens", f"{scores.quality:.1f}")
+                                st.metric("Growth Lens", f"{scores.growth:.1f}")
+                            
+                            with col2:
+                                st.metric("Financial Health", f"{scores.financial_health:.1f}")
+                                st.metric("Risk & Momentum", f"{scores.risk_momentum:.1f}")
+                                st.markdown(f"**Signal**: {signal}")
+                            
+                            st.markdown(framework.generate_recommendation(scores, {}))
         
-        # Evaluate each lens
-        valuation_score = self._evaluate_valuation_lens(stock_data, peer_data)
-        quality_score = self._evaluate_quality_lens(financial_metrics, peer_data)
-        growth_score = self._evaluate_growth_lens(financial_metrics, peer_data)
-        health_score = self._evaluate_financial_health_lens(financial_metrics, peer_data)
-        risk_score = self._evaluate_risk_momentum_lens(risk_metrics, stock_data)
-        
-        # Calculate composite score with weighting
-        weights = self._get_weights(stock_data.get('sector', 'Default'))
-        
-        composite = (
-            valuation_score * weights['valuation'] +
-            quality_score * weights['quality'] +
-            growth_score * weights['growth'] +
-            health_score * weights['financial_health'] +
-            risk_score * weights['risk_momentum']
-        )
-        
-        return LensScores(
-            valuation=valuation_score,
-            quality=quality_score,
-            growth=growth_score,
-            financial_health=health_score,
-            risk_momentum=risk_score,
-            composite=composite
-        )
+        except Exception as e:
+            st.error(f"❌ Error in financial analysis: {str(e)}")
+            import traceback
+            st.info(f"Debug Info:\n```\n{traceback.format_exc()}\n```")
 
-    # ═════════════════════════════════════════════════════════════════════════
-    # LENS 1: VALUATION LENS (20%)
-    # ═════════════════════════════════════════════════════════════════════════
+# ============================================================================
+# TAB 3: MARKET ANALYSIS
+# ============================================================================
+
+with tab3:
+    st.subheader("📈 Market Analysis")
     
-    def _evaluate_valuation_lens(self, stock_data: Dict, peer_data: Optional[Dict] = None) -> float:
-        """
-        Evaluate valuation metrics
-        Lower is better (stocks with lower multiples = cheaper)
-        
-        Metrics:
-        - P/E Ratio (40% weight)
-        - P/B Ratio (30% weight)
-        - Dividend Yield (20% weight)
-        - Price-to-Sales (10% weight) if available
-        """
-        scores = []
-        weights_local = []
-        
-        # P/E Ratio evaluation (40%)
-        pe_ratio = stock_data.get('pe_ratio')
-        if pe_ratio and not np.isnan(pe_ratio):
-            pe_score = self._evaluate_pe_ratio(pe_ratio, stock_data.get('sector'))
-            scores.append(pe_score)
-            weights_local.append(0.40)
-        
-        # P/B Ratio evaluation (30%)
-        pb_ratio = stock_data.get('pb_ratio')
-        if pb_ratio and not np.isnan(pb_ratio):
-            pb_score = self._evaluate_pb_ratio(pb_ratio)
-            scores.append(pb_score)
-            weights_local.append(0.30)
-        
-        # Dividend Yield evaluation (20%)
-        div_yield = stock_data.get('dividend_yield')
-        if div_yield and not np.isnan(div_yield):
-            div_score = self._evaluate_dividend_yield(div_yield)
-            scores.append(div_score)
-            weights_local.append(0.20)
-        
-        # Price-to-Sales (10%)
-        ps_ratio = stock_data.get('ps_ratio')
-        if ps_ratio and not np.isnan(ps_ratio):
-            ps_score = self._evaluate_ps_ratio(ps_ratio)
-            scores.append(ps_score)
-            weights_local.append(0.10)
-        
-        if not scores:
-            return 50.0  # Default neutral score
-        
-        # Normalize weights if not all metrics available
-        total_weight = sum(weights_local)
-        weights_local = [w / total_weight for w in weights_local]
-        
-        return np.average(scores, weights=weights_local)
-
-    @staticmethod
-    def _evaluate_pe_ratio(pe_ratio: float, sector: Optional[str] = None) -> float:
-        """
-        Evaluate P/E ratio
-        Optimal range: 15-25x (sector-dependent)
-        Very cheap: <15x (75-90 points)
-        Cheap: 15-20x (85-95 points)
-        Fair: 20-25x (80-90 points)
-        Expensive: 25-35x (50-80 points)
-        Very expensive: >35x (20-50 points)
-        """
-        if pe_ratio <= 0:
-            return 30.0  # Penalize negative or zero P/E
-        
-        if pe_ratio < 10:
-            return 70.0  # Very cheap but possibly distressed
-        elif pe_ratio < 15:
-            return 85.0  # Excellent valuation
-        elif pe_ratio < 20:
-            return 90.0  # Very good valuation
-        elif pe_ratio < 25:
-            return 80.0  # Good valuation
-        elif pe_ratio < 30:
-            return 70.0  # Moderate valuation
-        elif pe_ratio < 40:
-            return 50.0  # Expensive
-        else:
-            return 30.0  # Very expensive
-
-    @staticmethod
-    def _evaluate_pb_ratio(pb_ratio: float) -> float:
-        """
-        Evaluate Price-to-Book ratio
-        Optimal range: 1.5-3.0
-        """
-        if pb_ratio <= 0:
-            return 30.0
-        
-        if pb_ratio < 1.0:
-            return 75.0  # Trading below book value
-        elif pb_ratio < 1.5:
-            return 85.0  # Excellent value
-        elif pb_ratio < 3.0:
-            return 80.0  # Good value
-        elif pb_ratio < 5.0:
-            return 60.0  # Fair value
-        else:
-            return 40.0  # Overvalued
-
-    @staticmethod
-    def _evaluate_dividend_yield(div_yield: float) -> float:
-        """
-        Evaluate dividend yield
-        Higher is better for income investors
-        Typical range: 0-5%
-        """
-        div_pct = div_yield * 100  # Convert to percentage
-        
-        if div_pct < 0:
-            return 40.0  # Negative yield (share buyback)
-        elif div_pct < 1:
-            return 60.0  # Low yield
-        elif div_pct < 2:
-            return 70.0  # Moderate yield
-        elif div_pct < 3:
-            return 85.0  # Good yield
-        elif div_pct < 5:
-            return 80.0  # Very good yield
-        else:
-            return 50.0  # Unsustainably high yield (risky)
-
-    @staticmethod
-    def _evaluate_ps_ratio(ps_ratio: float) -> float:
-        """
-        Evaluate Price-to-Sales ratio
-        Lower is better
-        Typical range: 0.5-3.0
-        """
-        if ps_ratio <= 0:
-            return 30.0
-        
-        if ps_ratio < 1:
-            return 90.0  # Excellent
-        elif ps_ratio < 2:
-            return 80.0  # Good
-        elif ps_ratio < 3:
-            return 70.0  # Fair
-        elif ps_ratio < 5:
-            return 50.0  # Expensive
-        else:
-            return 30.0  # Very expensive
-
-    # ═════════════════════════════════════════════════════════════════════════
-    # LENS 2: QUALITY LENS (25%)
-    # ═════════════════════════════════════════════════════════════════════════
+    st.info("📊 Analyzing price movements and technical metrics")
     
-    def _evaluate_quality_lens(self, financial_metrics: Dict, peer_data: Optional[Dict] = None) -> float:
-        """
-        Evaluate quality of earnings and business
+    try:
+        all_data = fetch_all_company_data(period=selected_period)
         
-        Metrics:
-        - ROE (Return on Equity) (35%)
-        - Net Profit Margin (30%)
-        - ROIC (if available) (20%)
-        - Earnings Quality (15%)
-        """
-        scores = []
-        weights_local = []
-        
-        # ROE evaluation (35%)
-        roe = financial_metrics.get('roe')
-        if roe and not np.isnan(roe):
-            roe_score = self._evaluate_roe(roe)
-            scores.append(roe_score)
-            weights_local.append(0.35)
-        
-        # Net Profit Margin (30%)
-        npm = financial_metrics.get('npm')
-        if npm and not np.isnan(npm):
-            npm_score = self._evaluate_npm(npm)
-            scores.append(npm_score)
-            weights_local.append(0.30)
-        
-        # ROIC (20%)
-        roic = financial_metrics.get('roic')
-        if roic and not np.isnan(roic):
-            roic_score = self._evaluate_roic(roic)
-            scores.append(roic_score)
-            weights_local.append(0.20)
-        
-        # Earnings Quality (15%)
-        roa = financial_metrics.get('roa')
-        if roa and not np.isnan(roa):
-            eq_score = self._evaluate_earnings_quality(roa)
-            scores.append(eq_score)
-            weights_local.append(0.15)
-        
-        if not scores:
-            return 50.0
-        
-        total_weight = sum(weights_local)
-        weights_local = [w / total_weight for w in weights_local]
-        
-        return np.average(scores, weights=weights_local)
-
-    @staticmethod
-    def _evaluate_roe(roe: float) -> float:
-        """
-        Evaluate Return on Equity
-        Higher is better
-        Excellent: >25%
-        Good: 15-25%
-        Fair: 10-15%
-        Poor: <10%
-        """
-        roe_pct = roe * 100
-        
-        if roe_pct < 0:
-            return 20.0
-        elif roe_pct < 5:
-            return 40.0
-        elif roe_pct < 10:
-            return 60.0
-        elif roe_pct < 15:
-            return 75.0
-        elif roe_pct < 20:
-            return 85.0
-        elif roe_pct < 25:
-            return 90.0
+        if all_data:
+            # Create tabs for candlestick charts
+            st.markdown("### 📉 Candlestick Charts (3-Year History)")
+            
+            chart_tabs = st.tabs(["NVDA - NVIDIA", "MSFT - Microsoft", "AAPL - Apple", "GOOGL - Alphabet", "AMZN - Amazon"])
+            
+            ticker_list = list(all_data.keys())
+            
+            for idx, tab_container in enumerate(chart_tabs):
+                if idx < len(ticker_list):
+                    ticker = ticker_list[idx]
+                    data = all_data[ticker]
+                    
+                    with tab_container:
+                        price_data = data.get('price_data')
+                        company_info = data.get('company_info', {})
+                        company_name = TICKERS.get(ticker, company_info.get('longName', ticker))
+                        
+                        if price_data is not None and not price_data.empty:
+                            try:
+                                # Make a copy to avoid SettingWithCopyWarning
+                                price_data_copy = price_data.copy()
+                                
+                                # Handle MultiIndex - extract OHLCV level
+                                if isinstance(price_data_copy.columns, pd.MultiIndex):
+                                    # If MultiIndex, get the column type level (usually level 1)
+                                    price_data_copy.columns = price_data_copy.columns.get_level_values(-1)
+                                
+                                # Standardize column names - handle both 'Open' and 'open'
+                                col_mapping = {
+                                    'Open': 'open', 'open': 'open',
+                                    'High': 'high', 'high': 'high',
+                                    'Low': 'low', 'low': 'low',
+                                    'Close': 'close', 'close': 'close',
+                                    'Adj Close': 'adj close', 'adj close': 'adj close',
+                                    'Volume': 'volume', 'volume': 'volume'
+                                }
+                                
+                                # Rename columns
+                                new_columns = []
+                                for col in price_data_copy.columns:
+                                    new_columns.append(col_mapping.get(col, col.lower() if isinstance(col, str) else col))
+                                price_data_copy.columns = new_columns
+                                
+                                # Check for required columns
+                                required_cols = ['open', 'high', 'low', 'close']
+                                available_cols = list(price_data_copy.columns)
+                                missing_cols = [col for col in required_cols if col not in available_cols]
+                                
+                                if missing_cols:
+                                    st.warning(f"⚠️ Missing columns: {missing_cols}\nAvailable: {available_cols}")
+                                else:
+                                    # Create candlestick chart
+                                    fig = go.Figure(data=[go.Candlestick(
+                                        x=price_data_copy.index,
+                                        open=price_data_copy['open'],
+                                        high=price_data_copy['high'],
+                                        low=price_data_copy['low'],
+                                        close=price_data_copy['close']
+                                    )])
+                                    
+                                    fig.update_layout(
+                                        title=f"{ticker} - {company_name} (3-Year Candlestick Chart)",
+                                        yaxis_title="Price ($)",
+                                        xaxis_title="Date",
+                                        template="plotly_white",
+                                        height=500,
+                                        hovermode="x unified"
+                                    )
+                                    
+                                    st.plotly_chart(fig, width="stretch")
+                            except Exception as e:
+                                st.error(f"❌ Error displaying chart for {ticker}: {str(e)}")
+                        else:
+                            st.warning(f"❌ No price data available for {ticker}")
+            
+            st.divider()
+            
+            # Annual returns comparison
+            st.markdown("### 📊 Annual Returns Comparison")
+            
+            returns_data = {}
+            for ticker, data in all_data.items():
+                price_data = data.get('price_data')
+                
+                if price_data is not None and not price_data.empty:
+                    try:
+                        price_data_copy = price_data.copy()
+                        
+                        # Handle MultiIndex
+                        if isinstance(price_data_copy.columns, pd.MultiIndex):
+                            price_data_copy.columns = price_data_copy.columns.get_level_values(-1)
+                        
+                        # Standardize column names
+                        col_mapping = {
+                            'Open': 'open', 'open': 'open',
+                            'High': 'high', 'high': 'high',
+                            'Low': 'low', 'low': 'low',
+                            'Close': 'close', 'close': 'close',
+                            'Adj Close': 'adj close', 'adj close': 'adj close',
+                            'Volume': 'volume', 'volume': 'volume'
+                        }
+                        
+                        new_columns = []
+                        for col in price_data_copy.columns:
+                            new_columns.append(col_mapping.get(col, col.lower() if isinstance(col, str) else col))
+                        price_data_copy.columns = new_columns
+                        
+                        # Get close price
+                        if 'close' in price_data_copy.columns:
+                            close_prices = price_data_copy['close']
+                        elif 'adj close' in price_data_copy.columns:
+                            close_prices = price_data_copy['adj close']
+                        else:
+                            close_prices = price_data_copy.iloc[:, -1]
+                        
+                        annual_return = DataFetcher.calculate_annual_return(close_prices)
+                        returns_data[ticker] = annual_return * 100
+                    except:
+                        returns_data[ticker] = 0.0
+            
+            if returns_data:
+                fig_returns = go.Figure()
+                fig_returns.add_trace(go.Bar(
+                    x=list(returns_data.keys()),
+                    y=list(returns_data.values()),
+                    marker_color=['#4CAF50' if v > 0 else '#F44336' for v in returns_data.values()]
+                ))
+                fig_returns.update_layout(
+                    title="3-Year Annualized Returns",
+                    xaxis_title="Company",
+                    yaxis_title="Return (%)",
+                    template="plotly_white",
+                    height=400
+                )
+                st.plotly_chart(fig_returns, width="stretch")
         else:
-            return 95.0
-
-    @staticmethod
-    def _evaluate_npm(npm: float) -> float:
-        """
-        Evaluate Net Profit Margin
-        Higher is better
-        Varies by industry
-        """
-        npm_pct = npm * 100
-        
-        if npm_pct < 0:
-            return 20.0
-        elif npm_pct < 2:
-            return 50.0
-        elif npm_pct < 5:
-            return 65.0
-        elif npm_pct < 10:
-            return 80.0
-        elif npm_pct < 15:
-            return 85.0
-        elif npm_pct < 20:
-            return 90.0
-        else:
-            return 95.0
-
-    @staticmethod
-    def _evaluate_roic(roic: float) -> float:
-        """
-        Evaluate Return on Invested Capital
-        Higher is better
-        Should exceed WACC (typically 8-12%)
-        """
-        roic_pct = roic * 100
-        
-        if roic_pct < 0:
-            return 20.0
-        elif roic_pct < 5:
-            return 40.0
-        elif roic_pct < 10:
-            return 65.0
-        elif roic_pct < 15:
-            return 80.0
-        elif roic_pct < 20:
-            return 90.0
-        else:
-            return 95.0
-
-    @staticmethod
-    def _evaluate_earnings_quality(roa: float) -> float:
-        """
-        Evaluate Earnings Quality via ROA
-        Higher is better
-        """
-        roa_pct = roa * 100
-        
-        if roa_pct < 0:
-            return 20.0
-        elif roa_pct < 2:
-            return 50.0
-        elif roa_pct < 5:
-            return 70.0
-        elif roa_pct < 10:
-            return 85.0
-        else:
-            return 95.0
-
-    # ═════════════════════════════════════════════════════════════════════════
-    # LENS 3: GROWTH LENS (20%)
-    # ═════════════════════════════════════════════════════════════════════════
+            st.error("❌ Could not fetch market data")
     
-    def _evaluate_growth_lens(self, financial_metrics: Dict, peer_data: Optional[Dict] = None) -> float:
-        """
-        Evaluate growth prospects
-        
-        Metrics:
-        - Revenue Growth YoY (40%)
-        - Earnings Growth YoY (40%)
-        - Growth Quality (20%)
-        """
-        scores = []
-        weights_local = []
-        
-        # Revenue Growth (40%)
-        rev_growth = financial_metrics.get('revenue_growth_yoy')
-        if rev_growth and not np.isnan(rev_growth):
-            rev_score = self._evaluate_revenue_growth(rev_growth)
-            scores.append(rev_score)
-            weights_local.append(0.40)
-        
-        # Earnings Growth (40%)
-        earnings_growth = financial_metrics.get('earnings_growth_yoy')
-        if earnings_growth and not np.isnan(earnings_growth):
-            earning_score = self._evaluate_earnings_growth(earnings_growth)
-            scores.append(earning_score)
-            weights_local.append(0.40)
-        
-        # PEG Ratio (20%)
-        peg = financial_metrics.get('peg_ratio')
-        if peg and not np.isnan(peg):
-            peg_score = self._evaluate_peg_ratio(peg)
-            scores.append(peg_score)
-            weights_local.append(0.20)
-        
-        if not scores:
-            return 50.0
-        
-        total_weight = sum(weights_local)
-        weights_local = [w / total_weight for w in weights_local]
-        
-        return np.average(scores, weights=weights_local)
+    except Exception as e:
+        st.error(f"❌ Error in market analysis: {str(e)}")
+        st.info(f"Debug: {traceback.format_exc()}")
 
-    @staticmethod
-    def _evaluate_revenue_growth(growth: float) -> float:
-        """
-        Evaluate revenue growth rate
-        Positive is better
-        """
-        growth_pct = growth * 100
-        
-        if growth_pct < 0:
-            return 30.0
-        elif growth_pct < 5:
-            return 60.0
-        elif growth_pct < 10:
-            return 75.0
-        elif growth_pct < 15:
-            return 85.0
-        elif growth_pct < 25:
-            return 90.0
-        else:
-            return 85.0  # Very high growth may not be sustainable
+# ============================================================================
+# TAB 4: RISK ANALYSIS
+# ============================================================================
 
-    @staticmethod
-    def _evaluate_earnings_growth(growth: float) -> float:
-        """
-        Evaluate earnings growth rate
-        Positive is better
-        """
-        growth_pct = growth * 100
-        
-        if growth_pct < -10:
-            return 20.0
-        elif growth_pct < 0:
-            return 40.0
-        elif growth_pct < 5:
-            return 60.0
-        elif growth_pct < 15:
-            return 80.0
-        elif growth_pct < 25:
-            return 90.0
-        else:
-            return 85.0
-
-    @staticmethod
-    def _evaluate_peg_ratio(peg: float) -> float:
-        """
-        Evaluate PEG Ratio (P/E to Growth)
-        Optimal: < 1.0
-        Fair: 1.0-1.5
-        """
-        if peg < 0:
-            return 30.0
-        elif peg < 0.8:
-            return 95.0  # Excellent
-        elif peg < 1.0:
-            return 90.0  # Very good
-        elif peg < 1.5:
-            return 80.0  # Good
-        elif peg < 2.0:
-            return 60.0  # Fair
-        else:
-            return 40.0  # Expensive for growth
-
-    # ═════════════════════════════════════════════════════════════════════════
-    # LENS 4: FINANCIAL HEALTH LENS (20%)
-    # ═════════════════════════════════════════════════════════════════════════
+with tab4:
+    st.subheader("⚠️ Risk Analysis")
     
-    def _evaluate_financial_health_lens(self, financial_metrics: Dict, peer_data: Optional[Dict] = None) -> float:
-        """
-        Evaluate financial stability and solvency
-        
-        Metrics:
-        - Debt-to-Equity Ratio (35%)
-        - Current Ratio / Liquidity (30%)
-        - Interest Coverage (20%)
-        - Free Cash Flow (15%)
-        """
-        scores = []
-        weights_local = []
-        
-        # D/E Ratio (35%)
-        de_ratio = financial_metrics.get('debt_to_equity')
-        if de_ratio and not np.isnan(de_ratio):
-            de_score = self._evaluate_de_ratio(de_ratio)
-            scores.append(de_score)
-            weights_local.append(0.35)
-        
-        # Current Ratio (30%)
-        curr_ratio = financial_metrics.get('current_ratio')
-        if curr_ratio and not np.isnan(curr_ratio):
-            cr_score = self._evaluate_current_ratio(curr_ratio)
-            scores.append(cr_score)
-            weights_local.append(0.30)
-        
-        # Interest Coverage (20%)
-        int_cov = financial_metrics.get('interest_coverage')
-        if int_cov and not np.isnan(int_cov):
-            ic_score = self._evaluate_interest_coverage(int_cov)
-            scores.append(ic_score)
-            weights_local.append(0.20)
-        
-        # Free Cash Flow (15%)
-        fcf = financial_metrics.get('free_cash_flow')
-        if fcf is not None and not np.isnan(fcf):
-            fcf_score = 75.0 if fcf > 0 else 30.0
-            scores.append(fcf_score)
-            weights_local.append(0.15)
-        
-        if not scores:
-            return 50.0
-        
-        total_weight = sum(weights_local)
-        weights_local = [w / total_weight for w in weights_local]
-        
-        return np.average(scores, weights=weights_local)
-
-    @staticmethod
-    def _evaluate_de_ratio(de_ratio: float) -> float:
-        """
-        Evaluate Debt-to-Equity Ratio
-        Lower is better, but some leverage is healthy
-        Optimal range: 0.5-1.5
-        """
-        if de_ratio < 0:
-            return 30.0
-        elif de_ratio < 0.5:
-            return 85.0  # Conservative
-        elif de_ratio < 1.0:
-            return 90.0  # Optimal
-        elif de_ratio < 1.5:
-            return 80.0  # Acceptable
-        elif de_ratio < 2.0:
-            return 60.0  # Moderately leveraged
-        elif de_ratio < 3.0:
-            return 40.0  # High leverage
-        else:
-            return 20.0  # Very high leverage
-
-    @staticmethod
-    def _evaluate_current_ratio(curr_ratio: float) -> float:
-        """
-        Evaluate Current Ratio
-        Optimal range: 1.5-2.5
-        """
-        if curr_ratio < 0.5:
-            return 30.0
-        elif curr_ratio < 1.0:
-            return 50.0
-        elif curr_ratio < 1.5:
-            return 75.0
-        elif curr_ratio < 2.0:
-            return 90.0
-        elif curr_ratio < 3.0:
-            return 85.0
-        else:
-            return 70.0  # Too high may indicate inefficiency
-
-    @staticmethod
-    def _evaluate_interest_coverage(int_cov: float) -> float:
-        """
-        Evaluate Interest Coverage Ratio
-        Higher is better
-        Minimum safe: 2.5x
-        """
-        if int_cov < 0:
-            return 20.0
-        elif int_cov < 1.5:
-            return 30.0
-        elif int_cov < 2.5:
-            return 60.0
-        elif int_cov < 5.0:
-            return 80.0
-        elif int_cov < 10.0:
-            return 90.0
-        else:
-            return 95.0
-
-    # ═════════════════════════════════════════════════════════════════════════
-    # LENS 5: RISK & MOMENTUM LENS (15%)
-    # ═════════════════════════════════════════════════════════════════════════
+    st.info("Evaluating volatility, drawdown, and risk metrics")
     
-    def _evaluate_risk_momentum_lens(self, risk_metrics: Dict, stock_data: Dict) -> float:
-        """
-        Evaluate risk profile and momentum
+    try:
+        all_data = fetch_all_company_data(period=selected_period)
         
-        Metrics:
-        - Beta (35%)
-        - Volatility (30%)
-        - Sharpe Ratio (20%)
-        - Price Momentum (15%)
-        """
-        scores = []
-        weights_local = []
-        
-        # Beta (35%) - FIXED: Proper None handling
-        beta = risk_metrics.get('beta')
-        # Only evaluate if beta is not None and is a valid number
-        if beta is not None and not np.isnan(beta):
-            beta_score = self._evaluate_beta(beta)
-            scores.append(beta_score)
-            weights_local.append(0.35)
-        # If beta is None/missing, use neutral score
-        else:
-            scores.append(50.0)  # Neutral score when beta unavailable
-            weights_local.append(0.35)
-        
-        # Volatility (30%)
-        volatility = risk_metrics.get('volatility_252d')
-        if volatility is not None and not np.isnan(volatility):
-            vol_score = self._evaluate_volatility(volatility)
-            scores.append(vol_score)
-            weights_local.append(0.30)
-        else:
-            scores.append(50.0)  # Neutral score
-            weights_local.append(0.30)
-        
-        # Sharpe Ratio (20%)
-        sharpe = risk_metrics.get('sharpe_ratio')
-        if sharpe is not None and not np.isnan(sharpe):
-            sharpe_score = self._evaluate_sharpe_ratio(sharpe)
-            scores.append(sharpe_score)
-            weights_local.append(0.20)
-        else:
-            scores.append(50.0)  # Neutral score
-            weights_local.append(0.20)
-        
-        # Price Momentum (15%)
-        momentum = stock_data.get('price_momentum_52w')
-        if momentum is not None and not np.isnan(momentum):
-            mom_score = self._evaluate_momentum(momentum)
-            scores.append(mom_score)
-            weights_local.append(0.15)
-        else:
-            scores.append(50.0)  # Neutral score
-            weights_local.append(0.15)
-        
-        if not scores:
-            return 50.0
-        
-        total_weight = sum(weights_local)
-        weights_local = [w / total_weight for w in weights_local]
-        
-        return np.average(scores, weights=weights_local)
-
-    @staticmethod
-    def _evaluate_beta(beta: float) -> float:
-        """
-        Evaluate Beta (systematic risk)
-        Beta = 1.0 means matches market
-        Beta < 1.0 is more stable
-        Beta > 1.0 is more volatile
-        Optimal for conservative: 0.7-1.0
-        
-        IMPORTANT: This receives ACTUAL beta value (not 1.0 default!)
-        so different stocks will have different scores
-        """
-        # Handle edge cases
-        if np.isnan(beta) or beta is None:
-            return 50.0  # Neutral
-        
-        if beta < 0:
-            return 30.0
-        elif beta < 0.7:
-            return 85.0  # Low volatility / Defensive
-        elif beta < 1.0:
-            return 90.0  # Optimal / Moderate
-        elif beta < 1.3:
-            return 75.0  # Moderate volatility
-        elif beta < 1.5:
-            return 60.0  # Higher volatility
-        elif beta < 1.8:
-            return 45.0  # Very volatile
-        else:
-            return 35.0  # Extremely volatile
-
-    @staticmethod
-    def _evaluate_volatility(volatility: float) -> float:
-        """
-        Evaluate annualized volatility
-        Lower is better
-        Optimal: <20%
-        """
-        # Handle edge cases
-        if volatility is None or np.isnan(volatility):
-            return 50.0
-        
-        vol_pct = volatility * 100
-        
-        if vol_pct < 15:
-            return 90.0
-        elif vol_pct < 20:
-            return 80.0
-        elif vol_pct < 30:
-            return 70.0
-        elif vol_pct < 40:
-            return 50.0
-        else:
-            return 30.0
-
-    @staticmethod
-    def _evaluate_sharpe_ratio(sharpe: float) -> float:
-        """
-        Evaluate Sharpe Ratio (risk-adjusted return)
-        Higher is better
-        Excellent: >1.0
-        Good: 0.5-1.0
-        """
-        # Handle edge cases
-        if sharpe is None or np.isnan(sharpe):
-            return 50.0
-        
-        if sharpe < 0:
-            return 30.0
-        elif sharpe < 0.25:
-            return 50.0
-        elif sharpe < 0.5:
-            return 70.0
-        elif sharpe < 1.0:
-            return 85.0
-        elif sharpe < 1.5:
-            return 95.0
-        else:
-            return 95.0
-
-    @staticmethod
-    def _evaluate_momentum(momentum: float) -> float:
-        """
-        Evaluate 52-week price momentum
-        Positive is better
-        Range: -1.0 to +1.0 (as return percentage)
-        """
-        # Handle edge cases
-        if momentum is None or np.isnan(momentum):
-            return 50.0
-        
-        momentum_pct = momentum * 100
-        
-        if momentum_pct < -20:
-            return 40.0  # Strong downtrend
-        elif momentum_pct < -10:
-            return 55.0  # Downtrend
-        elif momentum_pct < 0:
-            return 65.0  # Slightly down
-        elif momentum_pct < 10:
-            return 70.0  # Slightly up
-        elif momentum_pct < 25:
-            return 80.0  # Positive momentum
-        elif momentum_pct < 50:
-            return 85.0  # Strong momentum
-        else:
-            return 75.0  # Very strong (potential pullback)
-
-    # ═════════════════════════════════════════════════════════════════════════
-    # UTILITY METHODS
-    # ═════════════════════════════════════════════════════════════════════════
+        if all_data:
+            # Volatility Comparison
+            st.markdown("### 📊 Volatility Comparison")
+            
+            volatility_data = {}
+            annual_returns_data = {}
+            sharpe_ratios = {}
+            max_drawdowns = {}
+            
+            for ticker, data in all_data.items():
+                price_data = data.get('price_data')
+                company_name = TICKERS.get(ticker, ticker)
+                
+                if price_data is not None and not price_data.empty:
+                    try:
+                        price_data_copy = price_data.copy()
+                        
+                        if isinstance(price_data_copy.columns, pd.MultiIndex):
+                            price_data_copy.columns = price_data_copy.columns.get_level_values(-1)
+                        
+                        # Standardize column names
+                        col_mapping = {
+                            'Open': 'open', 'open': 'open',
+                            'High': 'high', 'high': 'high',
+                            'Low': 'low', 'low': 'low',
+                            'Close': 'close', 'close': 'close',
+                            'Adj Close': 'adj close', 'adj close': 'adj close',
+                            'Volume': 'volume', 'volume': 'volume'
+                        }
+                        
+                        new_columns = []
+                        for col in price_data_copy.columns:
+                            new_columns.append(col_mapping.get(col, col.lower() if isinstance(col, str) else col))
+                        price_data_copy.columns = new_columns
+                        
+                        if 'close' in price_data_copy.columns:
+                            close_prices = price_data_copy['close']
+                        elif 'adj close' in price_data_copy.columns:
+                            close_prices = price_data_copy['adj close']
+                        else:
+                            close_prices = price_data_copy.iloc[:, -1]
+                        
+                        returns = DataFetcher.calculate_returns(close_prices).dropna()
+                        if not returns.empty:
+                            volatility = DataFetcher.calculate_volatility(returns)
+                            volatility_data[ticker] = volatility * 100
+                            annual_returns_data[ticker] = DataFetcher.calculate_annual_return(close_prices) * 100
+                            sharpe_ratios[ticker] = DataFetcher.calculate_sharpe_ratio(returns)
+                            max_drawdowns[ticker] = DataFetcher.calculate_max_drawdown(close_prices) * 100
+                    except:
+                        pass
+            
+            # Display metrics
+            if volatility_data:
+                col1, col2, col3, col4 = st.columns(4)
+                
+                with col1:
+                    st.metric("Highest Volatility", 
+                             f"{max(volatility_data.values()):.2f}%",
+                             max(volatility_data, key=volatility_data.get))
+                
+                with col2:
+                    st.metric("Lowest Volatility",
+                             f"{min(volatility_data.values()):.2f}%",
+                             min(volatility_data, key=volatility_data.get))
+                
+                with col3:
+                    st.metric("Best Sharpe Ratio",
+                             f"{max(sharpe_ratios.values()):.2f}",
+                             max(sharpe_ratios, key=sharpe_ratios.get))
+                
+                with col4:
+                    st.metric("Best Annual Return",
+                             f"{max(annual_returns_data.values()):.2f}%",
+                             max(annual_returns_data, key=annual_returns_data.get))
+                
+                st.divider()
+                
+                # Volatility chart
+                vol_df = pd.DataFrame(list(volatility_data.items()), columns=['Company', 'Volatility (%)'])
+                vol_df = vol_df.sort_values('Volatility (%)', ascending=False)
+                
+                fig = go.Figure(data=[go.Bar(x=vol_df['Company'], y=vol_df['Volatility (%)'],
+                                             marker_color=['#FF6B6B' if v > 30 else '#4ECDC4' 
+                                                          for v in vol_df['Volatility (%)']])])
+                fig.update_layout(title="Annual Volatility Comparison", height=400)
+                st.plotly_chart(fig, width="stretch")
+                
+                st.divider()
+                
+                # Risk metrics table
+                st.markdown("### 📋 Comprehensive Risk Metrics")
+                risk_df = pd.DataFrame({
+                    'Company': volatility_data.keys(),
+                    'Volatility (%)': [f"{v:.2f}" for v in volatility_data.values()],
+                    'Annual Return (%)': [f"{annual_returns_data.get(t, 0):.2f}" for t in volatility_data.keys()],
+                    'Sharpe Ratio': [f"{sharpe_ratios.get(t, 0):.2f}" for t in volatility_data.keys()],
+                    'Max Drawdown (%)': [f"{max_drawdowns.get(t, 0):.2f}" for t in volatility_data.keys()]
+                })
+                st.dataframe(risk_df, use_container_width=True)
     
-    def _get_weights(self, sector: str) -> Dict[str, float]:
-        """
-        Get sector-specific weights
-        Can be customized by sector
-        """
-        sector_specific = self.sector_weights.get(sector, {})
-        
-        # Start with defaults
-        weights = self.default_weights.copy()
-        
-        # Override with sector-specific weights
-        weights.update(sector_specific)
-        
-        # Ensure weights sum to 1.0
-        total = sum(weights.values())
-        return {k: v/total for k, v in weights.items()}
+    except Exception as e:
+        st.error(f"❌ Error in risk analysis: {str(e)}")
+
+# ============================================================================
+# TAB 5: SUMMARY
+# ============================================================================
+
+with tab5:
+    st.subheader("📋 Summary & Key Insights")
     
-    @staticmethod
-    def get_signal(score: float) -> Tuple[str, str]:
-        """
-        Convert composite score to investment signal
-        Returns (signal, color)
-        """
-        if score >= 85:
-            return ("🚀 Strong Buy", "green")
-        elif score >= 75:
-            return ("✅ Buy", "blue")
-        elif score >= 65:
-            return ("🟡 Hold / Accumulate", "orange")
-        elif score >= 50:
-            return ("⚠️  Watch", "gray")
-        else:
-            return ("🔴 Avoid", "red")
+    st.markdown("""
+    ### 📊 Analysis Summary
     
-    def generate_recommendation(self, lens_scores: LensScores, stock_data: Dict) -> str:
-        """
-        Generate detailed investment recommendation
-        """
-        composite = lens_scores.composite
-        signal, _ = self.get_signal(composite)
+    This platform provides a comprehensive financial analysis of the top 5 US tech companies
+    using the **Five-Lens Framework**.
+    
+    ### 🎯 Key Metrics
+    
+    - **Valuation Lens**: Assess if companies are fairly priced
+    - **Quality Lens**: Evaluate business quality and profitability
+    - **Growth Lens**: Analyze revenue and earnings growth
+    - **Financial Health**: Review balance sheet strength and cash flow
+    - **Risk & Momentum**: Evaluate volatility and market sentiment
+    
+    ### ⚠️ Important Notes
+    
+    1. **Educational Purpose**: This analysis is for learning only
+    2. **Not Investment Advice**: Consult a financial advisor before investing
+    3. **Past Performance**: Does not guarantee future results
+    4. **Data Sources**: Yahoo Finance and public company information
+    
+    ---
+    """)
+    
+    try:
+        all_data = fetch_all_company_data(period=selected_period)
         
-        strengths = []
-        weaknesses = []
-        
-        # Identify strengths and weaknesses
-        if lens_scores.valuation > 75:
-            strengths.append("Excellent valuation metrics")
-        if lens_scores.quality > 80:
-            strengths.append("High-quality business")
-        if lens_scores.growth > 75:
-            strengths.append("Strong growth prospects")
-        if lens_scores.financial_health > 80:
-            strengths.append("Solid financial position")
-        if lens_scores.risk_momentum > 75:
-            strengths.append("Favorable risk-return profile")
-        
-        if lens_scores.valuation < 50:
-            weaknesses.append("Valuation concerns")
-        if lens_scores.quality < 60:
-            weaknesses.append("Quality issues")
-        if lens_scores.growth < 50:
-            weaknesses.append("Limited growth prospects")
-        if lens_scores.financial_health < 50:
-            weaknesses.append("Financial health concerns")
-        if lens_scores.risk_momentum < 50:
-            weaknesses.append("High risk profile")
-        
-        recommendation = f"\n**Investment Signal: {signal}**\n\n"
-        
-        if strengths:
-            recommendation += f"**Strengths:**\n"
-            for s in strengths:
-                recommendation += f"  • {s}\n"
-        
-        if weaknesses:
-            recommendation += f"\n**Weaknesses:**\n"
-            for w in weaknesses:
-                recommendation += f"  • {w}\n"
-        
-        return recommendation
+        if all_data:
+            st.markdown("### 📈 Performance Summary")
+            
+            summary_data = []
+            for ticker, data in all_data.items():
+                price_data = data.get('price_data')
+                company_name = TICKERS.get(ticker, ticker)
+                
+                if price_data is not None and not price_data.empty:
+                    try:
+                        price_data_copy = price_data.copy()
+                        
+                        if isinstance(price_data_copy.columns, pd.MultiIndex):
+                            price_data_copy.columns = price_data_copy.columns.get_level_values(-1)
+                        
+                        # Standardize column names
+                        col_mapping = {
+                            'Open': 'open', 'open': 'open',
+                            'High': 'high', 'high': 'high',
+                            'Low': 'low', 'low': 'low',
+                            'Close': 'close', 'close': 'close',
+                            'Adj Close': 'adj close', 'adj close': 'adj close',
+                            'Volume': 'volume', 'volume': 'volume'
+                        }
+                        
+                        new_columns = []
+                        for col in price_data_copy.columns:
+                            new_columns.append(col_mapping.get(col, col.lower() if isinstance(col, str) else col))
+                        price_data_copy.columns = new_columns
+                        
+                        if 'close' in price_data_copy.columns:
+                            close_prices = price_data_copy['close']
+                        elif 'adj close' in price_data_copy.columns:
+                            close_prices = price_data_copy['adj close']
+                        else:
+                            close_prices = price_data_copy.iloc[:, -1]
+                        
+                        returns = DataFetcher.calculate_returns(close_prices).dropna()
+                        if not returns.empty:
+                            annual_return = DataFetcher.calculate_annual_return(close_prices) * 100
+                            volatility = DataFetcher.calculate_volatility(returns) * 100
+                            sharpe = DataFetcher.calculate_sharpe_ratio(returns)
+                            
+                            summary_data.append({
+                                'Company': company_name,
+                                'Annual Return (%)': f"{annual_return:.2f}%",
+                                'Volatility (%)': f"{volatility:.2f}%",
+                                'Sharpe Ratio': f"{sharpe:.2f}"
+                            })
+                    except:
+                        pass
+            
+            if summary_data:
+                summary_df = pd.DataFrame(summary_data)
+                st.dataframe(summary_df, use_container_width=True)
+            
+            st.markdown("### 💡 Insights")
+            st.info("""
+            **This analysis covers:**
+            - 3-year historical data analysis
+            - Five-lens multi-dimensional evaluation
+            - Professional investment signals (Buy/Hold/Avoid)
+            - Risk-adjusted return metrics
+            - Volatility and drawdown analysis
+            """)
+    except:
+        st.warning("Summary data currently loading...")
+    
+    st.markdown("---")
+    st.markdown("""
+    **For more information, visit The Mountain Path - World of Finance**
+    
+    Prof. V. Ravichandran
+    """)
+
+# ============================================================================
+# FOOTER
+# ============================================================================
+
+st.markdown("---")
+st.markdown("""
+<div style='text-align: center; color: #666;'>
+<p>© 2026 The Mountain Path - World of Finance</p>
+<p>Prof. V. Ravichandran | 28+ Years Finance Experience</p>
+</div>
+""", unsafe_allow_html=True)
