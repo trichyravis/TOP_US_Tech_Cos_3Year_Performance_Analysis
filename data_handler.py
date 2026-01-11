@@ -48,6 +48,15 @@ class DataFetcher:
         """
         try:
             data = yf.download(symbol, period=period, progress=False)
+            
+            # Handle yfinance column formatting
+            if isinstance(data.columns, pd.MultiIndex):
+                # MultiIndex: extract the second level (OHLCV names)
+                data.columns = data.columns.get_level_values(1)
+            
+            # Standardize column names to lowercase
+            data.columns = [col.lower() for col in data.columns]
+            
             return data
         except Exception as e:
             logger.error(f"Error fetching {symbol}: {e}")
