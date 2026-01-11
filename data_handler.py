@@ -1,3 +1,4 @@
+
 """
 Data Handler Module - Manages all data fetching, caching, and validation
 Purpose: Single source for data acquisition with fallback mechanisms
@@ -7,7 +8,7 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 import yfinance as yf
-import pandas_datareader as pdr
+import requests
 import sqlite3
 import logging
 from datetime import datetime, timedelta
@@ -93,25 +94,34 @@ def fetch_risk_free_rate():
         float: Risk-free rate as decimal (e.g., 0.0425 for 4.25%)
     """
     try:
-        # Method 1: FRED API (most reliable)
-        rf_data = pdr.get_data_fred(RF_RATE_TICKER)
-        rf_rate = rf_data.iloc[-1] / 100  # Convert % to decimal
-        logger.info(f"Risk-free rate fetched from FRED: {rf_rate:.4f}")
-        return rf_rate
+        # Method 1: FRED API (most reliable) - direct HTTP request
+        fred_url = f"https://fred.stlouisfed.org/data/{RF_RATE_TICKER}.json"
+        response = requests.get(fred_url, timeout=5)
+        
+        if response.status_code == 200:
+            data = response.json()
+            # Get the most recent data point
+            observations = data.get('observations', [])
+            if observations:
+                latest_value = observations[-1].get('value')
+                if latest_value and latest_value != '.':
+                    rf_rate = float(latest_value) / 100  # Convert % to decimal
+                    logger.info(f"Risk-free rate fetched from FRED: {rf_rate:.4f}")
+                    return rf_rate
     except Exception as e:
         logger.warning(f"FRED API failed: {e}. Trying yfinance...")
-        
-        try:
-            # Method 2: Fallback to yfinance TNX (10Y Yield)
-            tnx_data = yf.download('^TNX', period='1d', progress=False)
-            if not tnx_data.empty:
-                rf_rate = tnx_data['Close'].iloc[-1] / 100
-                logger.info(f"Risk-free rate fetched from yfinance: {rf_rate:.4f}")
-                return rf_rate
-        except Exception as e:
-            logger.error(f"All RF rate sources failed: {e}. Using default.")
-        
-        return RF_RATE_DEFAULT
+    
+    try:
+        # Method 2: Fallback to yfinance TNX (10Y Yield)
+        tnx_data = yf.download('^TNX', period='1d', progress=False)
+        if not tnx_data.empty:
+            rf_rate = tnx_data['Close'].iloc[-1] / 100
+            logger.info(f"Risk-free rate fetched from yfinance: {rf_rate:.4f}")
+            return rf_rate
+    except Exception as e:
+        logger.error(f"All RF rate sources failed: {e}. Using default.")
+    
+    return RF_RATE_DEFAULT
 
 
 def fetch_stock_price_data_robust(ticker, max_retries=MAX_RETRIES):
