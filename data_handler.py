@@ -1,464 +1,481 @@
 
 """
-Data Handler Module - Manages all data fetching for TOP US Tech Companies
-Based on proven DataFetcher pattern with robust error handling and fallbacks
+Data Handler Module - Manages all data fetching, caching, and validation
+Purpose: Single source for data acquisition with fallback mechanisms
 """
 
-import yfinance as yf
+import streamlit as st
 import pandas as pd
 import numpy as np
+import yfinance as yf
+import requests
+import sqlite3
+import logging
 from datetime import datetime, timedelta
+from config import (
+    TICKERS, DATA_PERIOD, DATA_INTERVAL, CACHE_TTL_SECONDS,
+    MAX_RETRIES, RETRY_DELAY_SECONDS, RF_RATE_SOURCE, RF_RATE_TICKER,
+    RF_RATE_DEFAULT, DB_PATH, BACKUP_DIR, LOG_DIR, TRADING_DAYS_PER_YEAR
+)
 import time
-from typing import Dict, Tuple, Optional
 
-class DataFetcher:
-    """Fetch and process stock data from yfinance for TOP US Tech Companies"""
+# ============================================================================
+# LOGGING SETUP
+# ============================================================================
+logging.basicConfig(
+    filename=f'{LOG_DIR}/data_handler.log',
+    level=logging.INFO,
+    format='%(asctime)s - %(levelname)s - %(message)s'
+)
+logger = logging.getLogger(__name__)
+
+
+# ============================================================================
+# DATABASE INITIALIZATION & MANAGEMENT
+# ============================================================================
+
+def initialize_database():
+    """
+    Initialize SQLite database with required tables
+    Creates tables for price cache and metadata if they don't exist
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        cursor = conn.cursor()
+        
+        # Create price cache table
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS price_cache (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ticker TEXT NOT NULL,
+            date DATE NOT NULL,
+            open REAL,
+            high REAL,
+            low REAL,
+            close REAL NOT NULL,
+            adj_close REAL,
+            volume INTEGER,
+            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+            UNIQUE(ticker, date)
+        )
+        ''')
+        
+        # Create metadata table for update tracking
+        cursor.execute('''
+        CREATE TABLE IF NOT EXISTS metadata (
+            ticker TEXT PRIMARY KEY,
+            last_update TIMESTAMP,
+            records_count INTEGER,
+            data_quality_score REAL
+        )
+        ''')
+        
+        # Create indices for faster queries
+        cursor.execute('CREATE INDEX IF NOT EXISTS idx_ticker_date ON price_cache(ticker, date)')
+        
+        conn.commit()
+        conn.close()
+        logger.info("Database initialized successfully")
+    except Exception as e:
+        logger.error(f"Failed to initialize database: {e}")
+
+
+# ============================================================================
+# PRIMARY DATA FETCHING
+# ============================================================================
+
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
+def fetch_risk_free_rate():
+    """
+    Fetch current 10-Year US Treasury Yield (risk-free rate)
+    Returns float or default value if API fails
     
-    # TOP US TECH COMPANIES REGISTRY
-    TECH_COMPANIES = {
-        'NVDA': {
-            'symbol': 'NVDA',
-            'name': 'NVIDIA Corporation',
-            'sector': 'Semiconductors',
-            'beta': 1.85
-        },
-        'MSFT': {
-            'symbol': 'MSFT',
-            'name': 'Microsoft Corporation',
-            'sector': 'Cloud & Software',
-            'beta': 0.90
-        },
-        'AAPL': {
-            'symbol': 'AAPL',
-            'name': 'Apple Inc.',
-            'sector': 'Consumer Electronics',
-            'beta': 1.25
-        },
-        'GOOGL': {
-            'symbol': 'GOOGL',
-            'name': 'Alphabet Inc. (Google)',
-            'sector': 'Search & Advertising',
-            'beta': 1.05
-        },
-        'AMZN': {
-            'symbol': 'AMZN',
-            'name': 'Amazon.com Inc.',
-            'sector': 'E-commerce & Cloud',
-            'beta': 1.15
-        }
-    }
+    Returns:
+        float: Risk-free rate as decimal (e.g., 0.0425 for 4.25%)
+    """
+    try:
+        # Method 1: FRED API (most reliable) - direct HTTP request
+        fred_url = f"https://fred.stlouisfed.org/data/{RF_RATE_TICKER}.json"
+        response = requests.get(fred_url, timeout=5)
+        
+        if response.status_code == 200:
+            data = response.json()
+            # Get the most recent data point
+            observations = data.get('observations', [])
+            if observations:
+                latest_value = observations[-1].get('value')
+                if latest_value and latest_value != '.':
+                    rf_rate = float(latest_value) / 100  # Convert % to decimal
+                    logger.info(f"Risk-free rate fetched from FRED: {rf_rate:.4f}")
+                    return rf_rate
+    except Exception as e:
+        logger.warning(f"FRED API failed: {e}. Trying yfinance...")
     
-    # Stock Beta values (pre-calculated for US Tech sector)
-    STOCK_BETA = {
-        'NVDA': 1.85,
-        'MSFT': 0.90,
-        'AAPL': 1.25,
-        'GOOGL': 1.05,
-        'AMZN': 1.15,
-    }
+    try:
+        # Method 2: Fallback to yfinance TNX (10Y Yield)
+        tnx_data = yf.download('^TNX', period='1d', progress=False)
+        if not tnx_data.empty:
+            rf_rate = tnx_data['Close'].iloc[-1] / 100
+            logger.info(f"Risk-free rate fetched from yfinance: {rf_rate:.4f}")
+            return rf_rate
+    except Exception as e:
+        logger.error(f"All RF rate sources failed: {e}. Using default.")
     
-    @staticmethod
-    def get_registry() -> Dict:
-        """Return TOP US Tech companies registry"""
-        return DataFetcher.TECH_COMPANIES
+    return RF_RATE_DEFAULT
+
+
+def fetch_stock_price_data_robust(ticker, max_retries=MAX_RETRIES):
+    """
+    Fetch historical stock price data with retry logic and fallback mechanisms
     
-    @staticmethod
-    def fetch_stock_data(symbol: str, period: str = "3y") -> Tuple[Optional[pd.DataFrame], Dict]:
-        """
-        Fetch stock data from yfinance with retry logic
-        
-        Args:
-            symbol: Stock ticker (e.g., 'NVDA')
-            period: Data period ('3y', '1y', '6mo')
-        
-        Returns:
-            Tuple of (price_history DataFrame, info dict)
-        """
-        max_retries = 3
-        
-        for attempt in range(max_retries):
-            try:
-                ticker = yf.Ticker(symbol)
-                
-                # Fetch price history
-                price_hist = ticker.history(period=period)
-                
-                if price_hist.empty:
-                    print(f"[{symbol}] Warning: Empty price data returned")
-                    if attempt < max_retries - 1:
-                        time.sleep(1)
-                    continue
-                
-                # Fetch info
-                info = ticker.info
-                
-                print(f"[{symbol}] Successfully fetched {len(price_hist)} rows")
-                return price_hist, info
-                
-            except Exception as e:
-                print(f"[{symbol}] Attempt {attempt+1}/{max_retries} failed: {type(e).__name__}")
-                if attempt < max_retries - 1:
-                    time.sleep(1)
-        
-        print(f"[{symbol}] All attempts failed")
-        return None, {}
+    Args:
+        ticker (str): Stock ticker (e.g., 'NVDA')
+        max_retries (int): Number of retry attempts
     
-    @staticmethod
-    def fetch_market_index(period: str = "3y") -> Optional[pd.DataFrame]:
-        """
-        Fetch S&P 500 index data as market benchmark
-        
-        Args:
-            period: Data period ('3y', '1y', '6mo')
-        
-        Returns:
-            Market index price history DataFrame
-        """
-        tickers_to_try = ["^GSPC", "^GSPC", "SPY"]  # S&P 500 alternatives
-        
-        for ticker in tickers_to_try:
-            max_retries = 3
+    Returns:
+        pd.DataFrame: OHLCV data or None if all methods fail
+    """
+    for attempt in range(max_retries):
+        try:
+            # Suppress yfinance warnings and info messages
+            import warnings
+            warnings.filterwarnings('ignore')
             
-            for attempt in range(max_retries):
-                try:
-                    index = yf.Ticker(ticker)
-                    market_data = index.history(period=period)
-                    
-                    if market_data is not None and not market_data.empty:
-                        print(f"[Market Index] {ticker}: Got {len(market_data)} rows")
-                        return market_data
-                        
-                except Exception as e:
-                    print(f"[Market Index] {ticker} attempt {attempt+1} failed: {type(e).__name__}")
-                
-                if attempt < max_retries - 1:
-                    time.sleep(1)
+            data = yf.download(
+                ticker,
+                period=DATA_PERIOD,
+                interval=DATA_INTERVAL,
+                progress=False,
+                prepost=False,
+                threads=False
+            )
+            
+            if data is None or data.empty:
+                logger.warning(f"Empty data returned for {ticker}, retrying...")
+                continue
+            
+            # Rename columns to lowercase for consistency
+            data.columns = data.columns.str.lower()
+            
+            # Validate data
+            if len(data) < 10:
+                logger.warning(f"Only {len(data)} records for {ticker}, retrying...")
+                continue
+            
+            logger.info(f"Successfully fetched {len(data)} records for {ticker}")
+            return data
+            
+        except (ConnectionError, TimeoutError) as e:
+            wait_time = min(RETRY_DELAY_SECONDS ** (attempt + 1), 10)
+            logger.warning(
+                f"Attempt {attempt+1}/{max_retries} failed for {ticker}: {e}. "
+                f"Retrying in {wait_time}s..."
+            )
+            time.sleep(wait_time)
         
-        print(f"[Market Index] All attempts failed")
+        except Exception as e:
+            logger.warning(f"Attempt {attempt+1} error for {ticker}: {str(e)[:100]}")
+            if attempt < max_retries - 1:
+                time.sleep(1)
+    
+    # All retries exhausted - try fallback mechanisms
+    logger.warning(f"All fetch attempts failed for {ticker}. Checking SQLite cache...")
+    cached_data = load_from_sqlite(ticker)
+    
+    if cached_data is not None and not cached_data.empty:
+        logger.info(f"Loaded {len(cached_data)} records from cache for {ticker}")
+        return cached_data
+    
+    # Final fallback: CSV backup
+    logger.warning(f"Cache empty for {ticker}. Trying CSV backup...")
+    backup_data = load_from_csv(ticker)
+    
+    if backup_data is not None:
+        logger.info(f"Loaded {len(backup_data)} records from CSV for {ticker}")
+        return backup_data
+    
+    logger.error(f"All data sources exhausted for {ticker}")
+    return None
+
+
+# ============================================================================
+# CACHE MANAGEMENT
+# ============================================================================
+
+def save_to_sqlite(ticker, data):
+    """
+    Persist stock price data to SQLite cache
+    
+    Args:
+        ticker (str): Stock ticker
+        data (pd.DataFrame): OHLCV data
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        
+        # Reset index to include date as column
+        data_to_save = data.reset_index()
+        data_to_save['ticker'] = ticker
+        
+        # Insert/replace data (UNIQUE constraint on ticker, date)
+        data_to_save.to_sql('price_cache', conn, if_exists='append', index=False)
+        
+        # Update metadata
+        cursor = conn.cursor()
+        cursor.execute('''
+        INSERT OR REPLACE INTO metadata (ticker, last_update, records_count, data_quality_score)
+        VALUES (?, ?, ?, ?)
+        ''', (ticker, datetime.now(), len(data), 0.95))
+        
+        conn.commit()
+        conn.close()
+        logger.info(f"Saved {len(data)} records for {ticker} to SQLite")
+        
+    except Exception as e:
+        logger.error(f"Failed to save {ticker} to SQLite: {e}")
+
+
+def load_from_sqlite(ticker):
+    """
+    Load stock price data from SQLite cache
+    
+    Args:
+        ticker (str): Stock ticker
+    
+    Returns:
+        pd.DataFrame or None
+    """
+    try:
+        conn = sqlite3.connect(DB_PATH)
+        query = f"""
+        SELECT date, open, high, low, close, adj_close, volume 
+        FROM price_cache 
+        WHERE ticker = '{ticker}' 
+        ORDER BY date DESC 
+        LIMIT {TRADING_DAYS_PER_YEAR * 3}
+        """
+        df = pd.read_sql_query(query, conn)
+        conn.close()
+        
+        if df.empty:
+            return None
+        
+        # Convert date to datetime and set as index
+        df['date'] = pd.to_datetime(df['date'])
+        df.set_index('date', inplace=True)
+        df = df.sort_index()
+        
+        # Rename columns to match yfinance format
+        df.columns = ['Open', 'High', 'Low', 'Close', 'Adj Close', 'Volume']
+        
+        logger.info(f"Loaded {len(df)} records for {ticker} from SQLite")
+        return df
+        
+    except Exception as e:
+        logger.error(f"Failed to load {ticker} from SQLite: {e}")
         return None
+
+
+def load_from_csv(ticker):
+    """
+    Load stock price data from CSV backup
     
-    @staticmethod
-    def calculate_beta(
-        symbol: str,
-        stock_data: pd.DataFrame,
-        market_data: pd.DataFrame
-    ) -> float:
-        """
-        Calculate beta with GUARANTEED fallback to lookup table.
-        This will ALWAYS return a beta value (never None)
-        """
-        
-        # Extract stock code (e.g., 'NVDA' → 'NVDA')
-        stock_code = symbol.replace('.NS', '').strip().upper()
-        
-        # APPROACH 1: Try direct calculation
-        try:
-            if stock_data is not None and market_data is not None:
-                if not stock_data.empty and not market_data.empty:
-                    
-                    s_prices = stock_data['Close'].tz_localize(None)
-                    m_prices = market_data['Close'].tz_localize(None)
-                    
-                    s_returns = s_prices.pct_change().dropna()
-                    m_returns = m_prices.pct_change().dropna()
-                    
-                    df_returns = pd.concat([s_returns, m_returns], axis=1, join="inner")
-                    df_returns.columns = ['stock', 'market']
-                    
-                    if len(df_returns) >= 30:
-                        covariance_matrix = np.cov(df_returns['stock'], df_returns['market'])
-                        covariance = covariance_matrix[0, 1]
-                        market_variance = covariance_matrix[1, 1]
-                        
-                        if market_variance != 0 and not np.isnan(covariance):
-                            beta = covariance / market_variance
-                            
-                            if not np.isnan(beta) and not np.isinf(beta) and -5 < beta < 5:
-                                result = round(float(beta), 4)
-                                print(f"[Beta] {stock_code}: Calculated = {result}")
-                                return result
-        except Exception as e:
-            print(f"[Beta] {stock_code}: Direct calculation failed ({type(e).__name__})")
-        
-        # APPROACH 2: Use stock beta from lookup table
-        if stock_code in DataFetcher.STOCK_BETA:
-            beta = DataFetcher.STOCK_BETA[stock_code]
-            print(f"[Beta] {stock_code}: Lookup = {beta}")
-            return beta
-        
-        # APPROACH 3: Default to 1.0 (market average)
-        print(f"[Beta] {stock_code}: Using default = 1.0")
-        return 1.0
+    Args:
+        ticker (str): Stock ticker
     
-    @staticmethod
-    def extract_stock_data(info: Dict, price_hist: pd.DataFrame) -> Dict:
-        """Extract key stock metrics from yfinance data"""
-        try:
-            current_price = info.get('currentPrice') or price_hist['Close'].iloc[-1]
-            
-            return {
-                'current_price': float(current_price) if current_price else None,
-                'pe_ratio': info.get('trailingPE'),
-                'pb_ratio': info.get('priceToBook'),
-                'ps_ratio': info.get('priceToSalesTrailing12Months'),
-                'dividend_yield': info.get('dividendYield'),
-                'market_cap': info.get('marketCap'),
-                '52_week_high': info.get('fiftyTwoWeekHigh'),
-                '52_week_low': info.get('fiftyTwoWeekLow'),
-                '52_week_change': info.get('fiftyTwoWeekChangePercent'),
-            }
-        except Exception as e:
-            print(f"Error extracting stock data: {e}")
-            return {}
-    
-    @staticmethod
-    def extract_financial_metrics(info: Dict) -> Dict:
-        """
-        Extract financial metrics with multiple fallback methods.
-        GUARANTEED to never return N/A values - always has fallbacks.
-        """
-        try:
-            metrics = {}
-            
-            # ════════════════════════════════════════════════════════════════
-            # Profitability Metrics
-            # ════════════════════════════════════════════════════════════════
-            metrics['roe'] = info.get('returnOnEquity')
-            metrics['npm'] = info.get('profitMargins')
-            metrics['roa'] = info.get('returnOnAssets')
-            metrics['roic'] = info.get('returnOnCapital')
-            
-            # ════════════════════════════════════════════════════════════════
-            # Revenue & Income
-            # ════════════════════════════════════════════════════════════════
-            metrics['total_revenue'] = info.get('totalRevenue')
-            metrics['operating_income'] = info.get('operatingIncome')
-            metrics['net_income'] = info.get('netIncome')
-            metrics['free_cash_flow'] = info.get('freeCashFlow')
-            
-            # ════════════════════════════════════════════════════════════════
-            # Debt to Equity Ratio
-            # ════════════════════════════════════════════════════════════════
-            debt_to_equity = info.get('debtToEquity')
-            if debt_to_equity is None:
-                try:
-                    total_debt = info.get('totalDebt')
-                    total_equity = info.get('totalEquity')
-                    if total_debt and total_equity and total_equity > 0:
-                        debt_to_equity = total_debt / total_equity
-                except:
-                    pass
-            metrics['debt_to_equity'] = debt_to_equity
-            
-            # ════════════════════════════════════════════════════════════════
-            # Current Ratio
-            # ════════════════════════════════════════════════════════════════
-            current_ratio = info.get('currentRatio')
-            if current_ratio is None:
-                try:
-                    current_assets = info.get('currentAssets')
-                    current_liabilities = info.get('currentLiabilities')
-                    if current_assets and current_liabilities and current_liabilities > 0:
-                        current_ratio = current_assets / current_liabilities
-                except:
-                    pass
-            metrics['current_ratio'] = current_ratio
-            
-            # ════════════════════════════════════════════════════════════════
-            # ✅ IMPROVED: Interest Coverage Ratio with Multiple Methods
-            # ════════════════════════════════════════════════════════════════
-            interest_coverage = None
-            
-            # METHOD 1: Try direct field from yfinance
-            interest_coverage = info.get('interestCoverage')
-            if interest_coverage and not np.isnan(interest_coverage):
-                print(f"[Interest Coverage] Using yfinance value: {interest_coverage:.2f}")
-            else:
-                interest_coverage = None
-            
-            # METHOD 2: Calculate from EBIT / Interest Expense
-            if interest_coverage is None:
-                try:
-                    ebit = (info.get('ebit') or 
-                           info.get('operatingIncome') or 
-                           info.get('operatingRevenue'))
-                    
-                    interest_expense = info.get('interestExpense')
-                    
-                    if ebit and interest_expense and interest_expense > 0 and not np.isnan(ebit):
-                        interest_coverage = float(ebit) / float(interest_expense)
-                        if not np.isnan(interest_coverage):
-                            print(f"[Interest Coverage] Calculated from EBIT: {interest_coverage:.2f}")
-                except Exception as e:
-                    print(f"[Interest Coverage] Method 2 failed: {type(e).__name__}")
-            
-            # METHOD 3: Calculate from Net Income + Interest + Taxes
-            if interest_coverage is None:
-                try:
-                    net_income = info.get('netIncome')
-                    interest_expense = info.get('interestExpense')
-                    income_taxes = info.get('incomeTaxExpense')
-                    
-                    if (net_income is not None and interest_expense and 
-                        income_taxes is not None and interest_expense > 0):
-                        ebit = float(net_income) + float(interest_expense) + float(income_taxes)
-                        if ebit > 0:
-                            interest_coverage = ebit / float(interest_expense)
-                            if not np.isnan(interest_coverage):
-                                print(f"[Interest Coverage] Calculated from NI+I+T: {interest_coverage:.2f}")
-                except Exception as e:
-                    print(f"[Interest Coverage] Method 3 failed: {type(e).__name__}")
-            
-            # METHOD 4: Use reasonable default if calculation fails
-            if interest_coverage is None:
-                interest_coverage = 10.0  # Tech companies typically have high coverage
-                print(f"[Interest Coverage] Using default: {interest_coverage:.2f}")
-            
-            # Ensure interest_coverage is a valid number
-            if interest_coverage is not None:
-                interest_coverage = float(interest_coverage)
-                if np.isnan(interest_coverage) or np.isinf(interest_coverage):
-                    interest_coverage = 10.0
-            else:
-                interest_coverage = 10.0
-            
-            metrics['interest_coverage'] = interest_coverage
-            
-            # ════════════════════════════════════════════════════════════════
-            # Growth Metrics
-            # ════════════════════════════════════════════════════════════════
-            metrics['revenue_growth_yoy'] = info.get('revenueGrowth')
-            metrics['earnings_growth_yoy'] = info.get('earningsGrowth')
-            metrics['peg_ratio'] = info.get('pegRatio')
-            
-            return metrics
-            
-        except Exception as e:
-            print(f"Error extracting financial metrics: {e}")
-            return {
-                'roe': None,
-                'npm': None,
-                'roa': None,
-                'roic': None,
-                'total_revenue': None,
-                'operating_income': None,
-                'net_income': None,
-                'free_cash_flow': None,
-                'debt_to_equity': None,
-                'current_ratio': None,
-                'interest_coverage': 10.0,  # Safe default - NEVER N/A
-                'revenue_growth_yoy': None,
-                'earnings_growth_yoy': None,
-                'peg_ratio': None,
-            }
-    
-    @staticmethod
-    def calculate_returns(prices: pd.Series) -> pd.Series:
-        """Calculate daily returns from price series"""
-        return prices.pct_change()
-    
-    @staticmethod
-    def calculate_annual_return(prices: pd.Series) -> float:
-        """Calculate annualized return"""
-        if len(prices) < 2:
-            return 0.0
-        try:
-            first_price = prices.iloc[0]
-            last_price = prices.iloc[-1]
-            total_return = (last_price - first_price) / first_price
-            years = len(prices) / 252  # Trading days per year
-            annual_return = (1 + total_return) ** (1 / years) - 1
-            return annual_return
-        except:
-            return 0.0
-    
-    @staticmethod
-    def calculate_volatility(returns: pd.Series) -> float:
-        """Calculate annualized volatility"""
-        try:
-            daily_vol = returns.std()
-            annual_vol = daily_vol * np.sqrt(252)
-            return annual_vol
-        except:
-            return 0.0
-    
-    @staticmethod
-    def calculate_sharpe_ratio(returns: pd.Series, risk_free_rate: float = 0.04) -> float:
-        """Calculate Sharpe ratio"""
-        try:
-            annual_return = DataFetcher.calculate_annual_return(returns)
-            annual_vol = DataFetcher.calculate_volatility(returns)
-            
-            if annual_vol == 0:
-                return 0.0
-            
-            sharpe = (annual_return - risk_free_rate) / annual_vol
-            return sharpe
-        except:
-            return 0.0
-    
-    @staticmethod
-    def calculate_max_drawdown(prices: pd.Series) -> float:
-        """Calculate maximum drawdown"""
-        try:
-            running_max = prices.expanding().max()
-            drawdown = (prices - running_max) / running_max
-            max_dd = drawdown.min()
-            return max_dd
-        except:
-            return 0.0
+    Returns:
+        pd.DataFrame or None
+    """
+    try:
+        filepath = f'{BACKUP_DIR}/{ticker}_3y_backup.csv'
+        df = pd.read_csv(filepath, index_col=0, parse_dates=True)
+        logger.info(f"Loaded {len(df)} records for {ticker} from CSV")
+        return df
+    except FileNotFoundError:
+        logger.warning(f"No CSV backup found for {ticker}")
+        return None
+    except Exception as e:
+        logger.error(f"Failed to load {ticker} from CSV: {e}")
+        return None
 
 
 # ============================================================================
-# STREAMLIT INTEGRATION FUNCTIONS
+# DATA VALIDATION
 # ============================================================================
 
-import streamlit as st
+def validate_data_quality(df, ticker):
+    """
+    Validate data quality and flag issues
+    
+    Args:
+        df (pd.DataFrame): OHLCV data
+        ticker (str): Stock ticker
+    
+    Returns:
+        dict: Validation results {issue: severity}
+    """
+    issues = {}
+    
+    if df is None or df.empty:
+        return {'empty_data': 'Critical'}
+    
+    # Check for missing values
+    missing_pct = df.isnull().sum().sum() / (df.size) * 100 if df.size > 0 else 0
+    if missing_pct > 5:
+        issues['missing_values'] = f"High: {missing_pct:.1f}% missing"
+    
+    # Check for stale data
+    if (datetime.now() - df.index[-1]).days > 2:
+        issues['stale_data'] = f"Data is {(datetime.now() - df.index[-1]).days} days old"
+    
+    # Log issues
+    if issues:
+        logger.warning(f"{ticker} data issues: {issues}")
+    else:
+        logger.info(f"{ticker} passed data quality checks")
+    
+    return issues
 
-@st.cache_data(ttl=3600)
-def fetch_all_company_data(period: str = "3y") -> Dict:
+
+# ============================================================================
+# DATA RETRIEVAL WRAPPER (PUBLIC INTERFACE)
+# ============================================================================
+
+def get_all_stock_data():
     """
-    Fetch data for all TOP US Tech companies
-    Cached for 1 hour
+    Fetch data for all tickers with caching
+    
+    Returns:
+        dict: {ticker: DataFrame}
     """
-    registry = DataFetcher.get_registry()
     all_data = {}
     
-    for ticker, info in registry.items():
-        price_data, ticker_info = DataFetcher.fetch_stock_data(ticker, period)
-        
-        if price_data is not None:
-            all_data[ticker] = {
-                'price_data': price_data,
-                'info': ticker_info,
-                'stock_metrics': DataFetcher.extract_stock_data(ticker_info, price_data),
-                'financial_metrics': DataFetcher.extract_financial_metrics(ticker_info),
-                'company_info': info
-            }
+    for ticker in TICKERS.keys():
+        data = fetch_stock_price_data_robust(ticker)
+        if data is not None:
+            # Validate & save to cache
+            issues = validate_data_quality(data, ticker)
+            save_to_sqlite(ticker, data)
+            all_data[ticker] = data
         else:
-            print(f"[{ticker}] Failed to fetch data")
+            st.warning(f"⚠️ Could not fetch data for {ticker}. Using cached data...")
+            cached_data = load_from_sqlite(ticker)
+            if cached_data is not None:
+                all_data[ticker] = cached_data
     
     return all_data
 
-@st.cache_data(ttl=3600)
-def fetch_market_data(period: str = "3y") -> Optional[pd.DataFrame]:
-    """
-    Fetch market index data
-    Cached for 1 hour
-    """
-    return DataFetcher.fetch_market_index(period)
 
-def get_company_data(ticker: str, period: str = "3y") -> Dict:
-    """Get data for a specific company"""
-    price_data, ticker_info = DataFetcher.fetch_stock_data(ticker, period)
+@st.cache_data(ttl=CACHE_TTL_SECONDS)
+def get_stock_data(ticker):
+    """
+    Get stock data for single ticker with caching
     
-    if price_data is not None:
+    Args:
+        ticker (str): Stock ticker
+    
+    Returns:
+        pd.DataFrame or None
+    """
+    data = fetch_stock_price_data_robust(ticker)
+    if data is not None:
+        save_to_sqlite(ticker, data)
+        return data
+    else:
+        return load_from_sqlite(ticker)
+
+
+# ============================================================================
+# INITIALIZATION
+# ============================================================================
+
+def initialize_data_handler():
+    """Call on app startup to set up database"""
+    initialize_database()
+    logger.info("Data handler initialized")
+
+
+# ============================================================================
+# COMPANY DATA FETCHING
+# ============================================================================
+
+def fetch_all_company_data(period="3y"):
+    """
+    Fetch data for all companies
+    
+    Args:
+        period (str): Data period - "1y", "2y", or "3y"
+    
+    Returns:
+        dict: Data for all companies
+    """
+    tickers = TICKERS
+    all_data = {}
+    
+    for ticker in tickers:
+        try:
+            # Fetch price data
+            price_data = DataFetcher.fetch_stock_data(ticker, period=period)
+            
+            # Fetch company info
+            stock = yf.Ticker(ticker)
+            company_info = stock.info
+            
+            all_data[ticker] = {
+                'price_data': price_data,
+                'company_info': company_info
+            }
+        except Exception as e:
+            logger.error(f"Error fetching data for {ticker}: {e}")
+            all_data[ticker] = {
+                'price_data': None,
+                'company_info': {}
+            }
+    
+    return all_data
+
+
+def fetch_market_data(period="3y"):
+    """
+    Fetch market index data (S&P 500)
+    
+    Args:
+        period (str): Data period - "1y", "2y", or "3y"
+    
+    Returns:
+        pd.DataFrame: Market data
+    """
+    try:
+        market_data = yf.download('^GSPC', period=period, progress=False)
+        return market_data
+    except Exception as e:
+        logger.error(f"Error fetching market data: {e}")
+        return None
+
+
+def get_company_data(ticker, period="3y"):
+    """
+    Get data for single company
+    
+    Args:
+        ticker (str): Stock ticker
+        period (str): Data period - "1y", "2y", or "3y"
+    
+    Returns:
+        dict: Company data
+    """
+    try:
+        price_data = DataFetcher.fetch_stock_data(ticker, period=period)
+        stock = yf.Ticker(ticker)
+        company_info = stock.info
+        
         return {
             'price_data': price_data,
-            'info': ticker_info,
-            'stock_metrics': DataFetcher.extract_stock_data(ticker_info, price_data),
-            'financial_metrics': DataFetcher.extract_financial_metrics(ticker_info),
-            'company_info': DataFetcher.get_registry().get(ticker, {})
+            'company_info': company_info
         }
-    else:
-        return {}
+    except Exception as e:
+        logger.error(f"Error fetching data for {ticker}: {e}")
+        return {
+            'price_data': None,
+            'company_info': {}
+        }
