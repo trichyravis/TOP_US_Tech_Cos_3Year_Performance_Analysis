@@ -503,7 +503,8 @@ with tab4:
                     risk_metrics = RiskAnalyzer.generate_risk_metrics_dict(
                         returns, 
                         annual_return,
-                        [0.90, 0.95, 0.99]
+                        prices=price_data['close'],
+                        confidence_levels=[0.90, 0.95, 0.99]
                     )
                     
                     # Store for display
@@ -513,6 +514,7 @@ with tab4:
                         'Volatility': f"{risk_metrics['volatility']*100:.2f}%",
                         'Sharpe Ratio': f"{risk_metrics['sharpe_ratio']:.2f}",
                         'Sortino Ratio': f"{risk_metrics['sortino_ratio']:.2f}",
+                        'Max Drawdown': f"{risk_metrics['max_drawdown']*100:.2f}%",
                         'VAR 95%': f"{risk_metrics['var_95']*100:.2f}%",
                         'CVAR 95%': f"{risk_metrics['cvar_95']*100:.2f}%",
                         'Risk Assessment': risk_metrics['risk_assessment']
@@ -599,7 +601,7 @@ with tab4:
                     metrics = data['metrics']
                     
                     with st.expander(f"📊 {ticker} - {company_info.get('name', 'Unknown')} | {metrics['risk_assessment']}"):
-                        col1, col2, col3, col4 = st.columns(4)
+                        col1, col2, col3, col4, col5 = st.columns(5)
                         
                         with col1:
                             st.metric("Annual Return", f"{metrics['annual_return']*100:.2f}%")
@@ -609,6 +611,8 @@ with tab4:
                             st.metric("Sharpe Ratio", f"{metrics['sharpe_ratio']:.2f}")
                         with col4:
                             st.metric("Sortino Ratio", f"{metrics['sortino_ratio']:.2f}")
+                        with col5:
+                            st.metric("Max Drawdown", f"{metrics['max_drawdown']*100:.2f}%")
                         
                         st.divider()
                         
@@ -640,11 +644,30 @@ with tab4:
                         
                         st.divider()
                         
+                        st.markdown("**Drawdown Analysis**")
+                        col1, col2 = st.columns(2)
+                        
+                        with col1:
+                            mdd = metrics.get('max_drawdown', 0) * 100
+                            st.metric("Maximum Drawdown", f"{mdd:.2f}%")
+                        with col2:
+                            recovery = metrics.get('recovery_days', 0)
+                            if recovery == -1:
+                                st.metric("Recovery Time", "Still in DD")
+                            elif recovery == 0:
+                                st.metric("Recovery Time", "N/A")
+                            else:
+                                st.metric("Recovery Time", f"{recovery} days")
+                        
+                        st.divider()
+                        
                         st.markdown(f"**Risk Assessment: {metrics['risk_assessment']}**")
                         st.markdown("""
                         **Interpretation:**
                         - **VAR**: Maximum expected loss with (1-confidence)% probability
                         - **CVAR**: Expected loss if VAR threshold is breached
+                        - **Max Drawdown**: Largest peak-to-trough decline from peak
+                        - **Recovery Time**: Days to recover from maximum drawdown
                         - **Higher confidence** = More conservative estimate
                         """)
     
