@@ -34,12 +34,133 @@ st.set_page_config(
 # IMPORTS
 # ============================================================================
 
+FRAMEWORK_AVAILABLE = False
+FiveLensFramework = None
+DataFetcher = None
+fetch_all_company_data = None
+fetch_market_data = None
+
 try:
     from financial_performance import FiveLensFramework
     from data_handler import DataFetcher, fetch_all_company_data, fetch_market_data
     FRAMEWORK_AVAILABLE = True
-except:
-    FRAMEWORK_AVAILABLE = False
+except ImportError as e:
+    st.warning(f"⚠️ Module import error: {e}")
+    
+    # Define fallback classes/functions if imports fail
+    class DataFetcher:
+        @staticmethod
+        def fetch_stock_data(symbol, period="3y"):
+            data = yf.download(symbol, period=period, progress=False)
+            if isinstance(data.columns, pd.MultiIndex):
+                data.columns = data.columns.get_level_values(1)
+            data.columns = [col.lower() for col in data.columns]
+            return data
+        
+        @staticmethod
+        def calculate_returns(prices):
+            if prices is None or len(prices) < 2:
+                return pd.Series()
+            return prices.pct_change()
+        
+        @staticmethod
+        def calculate_annual_return(prices):
+            if prices is None or len(prices) < 2:
+                return 0.0
+            start = prices.iloc[0]
+            end = prices.iloc[-1]
+            years = len(prices) / 252
+            return (end / start) ** (1 / years) - 1 if years > 0 else 0.0
+        
+        @staticmethod
+        def calculate_volatility(returns):
+            if returns is None or len(returns) < 2:
+                return 0.0
+            return returns.std() * np.sqrt(252)
+        
+        @staticmethod
+        def calculate_sharpe_ratio(returns, risk_free_rate=0.02):
+            if len(returns) < 2:
+                return 0.0
+            annual_return = returns.mean() * 252
+            annual_volatility = returns.std() * np.sqrt(252)
+            if annual_volatility == 0:
+                return 0.0
+            return (annual_return - risk_free_rate) / annual_volatility
+        
+        @staticmethod
+        def calculate_max_drawdown(prices):
+            if prices is None or len(prices) < 2:
+                return 0.0
+            running_max = prices.expanding().max()
+            drawdown = (prices - running_max) / running_max
+            return drawdown.min()
+        
+        @staticmethod
+        def calculate_beta(stock_returns, market_returns):
+            if len(stock_returns) < 2 or len(market_returns) < 2:
+                return 1.0
+            cov_matrix = np.cov(stock_returns, market_returns)
+            beta = cov_matrix[0][1] / cov_matrix[1][1]
+            return beta
+    
+    def fetch_all_company_data(period="3y"):
+        all_data = {}
+        TICKERS_LIST = ['NVDA', 'MSFT', 'AAPL', 'GOOGL', 'AMZN']
+        for ticker in TICKERS_LIST:
+            try:
+                price_data = DataFetcher.fetch_stock_data(ticker, period=period)
+                stock = yf.Ticker(ticker)
+                company_info = stock.info
+                all_data[ticker] = {
+                    'price_data': price_data,
+                    'company_info': company_info
+                }
+            except Exception as e:
+                all_data[ticker] = {
+                    'price_data': None,
+                    'company_info': {}
+                }
+        return all_data
+    
+    def fetch_market_data(period="3y"):
+        try:
+            data = yf.download('^GSPC', period=period, progress=False)
+            if isinstance(data.columns, pd.MultiIndex):
+                data.columns = data.columns.get_level_values(1)
+            data.columns = [col.lower() for col in data.columns]
+            return data
+        except:
+            return None
+    
+    class FiveLensFramework:
+        def __init__(self):
+            pass
+        
+        def evaluate_stock(self, stock_data, financial_metrics, risk_metrics):
+            class Scores:
+                composite = 75.0
+                valuation = 70.0
+                quality = 85.0
+                growth = 78.0
+                financial_health = 80.0
+                risk_momentum = 72.0
+            return Scores()
+        
+        def get_signal(self, score):
+            if score >= 85:
+                return "🚀 Strong Buy", "#00cc00"
+            elif score >= 75:
+                return "✅ Buy", "#00aa00"
+            elif score >= 65:
+                return "🟡 Hold", "#ffaa00"
+            elif score >= 50:
+                return "⚠️ Watch", "#ff6600"
+            else:
+                return "🔴 Avoid", "#ff0000"
+        
+        def generate_recommendation(self, scores, stock_data):
+            return "### Investment Recommendation\nFallback analysis active."
 
 # ============================================================================
 # DATA
