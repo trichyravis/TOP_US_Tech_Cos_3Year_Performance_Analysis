@@ -787,114 +787,28 @@ with tab5:
 
 st.markdown("---")
 
-# Professional footer with clean design
-footer_html = """
-<style>
-.footer-container {
-    background: linear-gradient(135deg, #003366 0%, #004d80 100%);
-    padding: 40px 30px;
-    border-radius: 10px;
-    margin: 30px 0;
-    text-align: center;
-}
-
-.footer-title {
-    font-size: 18px;
-    font-weight: bold;
-    color: #FFD700;
-    margin: 0 0 10px 0;
-    letter-spacing: 1px;
-}
-
-.footer-author {
-    font-size: 14px;
-    color: white;
-    margin: 5px 0;
-    font-weight: 600;
-}
-
-.footer-credentials {
-    font-size: 12px;
-    color: #FFD700;
-    margin: 5px 0 15px 0;
-}
-
-.footer-links {
-    font-size: 12px;
-    margin: 15px 0;
-}
-
-.footer-links a {
-    color: #FFD700;
-    text-decoration: none;
-    font-weight: bold;
-    margin: 0 10px;
-}
-
-.footer-links a:hover {
-    text-decoration: underline;
-}
-
-.footer-divider {
-    border-top: 1px solid #FFD700;
-    margin: 15px 0;
-    opacity: 0.3;
-}
-
-.footer-disclaimer {
-    background: rgba(30, 90, 150, 0.5);
-    border-left: 4px solid #FFD700;
-    padding: 15px;
-    margin: 20px 0;
-    border-radius: 5px;
-    text-align: left;
-    font-size: 11px;
-    line-height: 1.7;
-    color: white;
-}
-
-.footer-disclaimer-title {
-    color: #FFD700;
-    font-weight: bold;
-    margin-bottom: 8px;
-}
-
-.footer-copyright {
-    font-size: 10px;
-    color: #FFD700;
-    margin-top: 20px;
-    font-style: italic;
-}
-</style>
-
-<div class="footer-container">
-    <div class="footer-title">THE MOUNTAIN PATH - WORLD OF FINANCE</div>
+# Simple footer using Streamlit containers
+with st.container():
+    col1, col2, col3 = st.columns([1, 2, 1])
     
-    <div class="footer-author">Prof. V. Ravichandran</div>
-    <div class="footer-credentials">28+ Years Corporate Finance & Banking | 10+ Years Academic Excellence</div>
-    
-    <div class="footer-links">
-        <a href="https://www.linkedin.com/in/trichyravis/" target="_blank">LinkedIn</a>
-        <span style="color: #FFD700;">|</span>
-        <a href="https://github.com/trichyravis" target="_blank">GitHub</a>
-    </div>
-    
-    <div class="footer-divider"></div>
-    
-    <div class="footer-disclaimer">
-        <div class="footer-disclaimer-title">DISCLAIMER</div>
-        <div>
-            This tool is for <strong>educational purposes only</strong>. 
-            <strong>NOT financial advice</strong>. Always consult with a qualified financial advisor 
-            before making investment decisions. Past performance does not guarantee future results. 
-            This tool does not include taxes, fees, or transaction costs.
-        </div>
-    </div>
-    
-    <div class="footer-copyright">
-        © 2024 The Mountain Path - World of Finance. All rights reserved.
-    </div>
-</div>
-"""
+    with col2:
+        st.markdown("### 🏛️ THE MOUNTAIN PATH - WORLD OF FINANCE", unsafe_allow_html=False)
+        st.markdown("**Prof. V. Ravichandran**")
+        st.markdown("*28+ Years Corporate Finance & Banking | 10+ Years Academic Excellence*")
+        
+        st.markdown("")
+        col_a, col_b = st.columns(2)
+        with col_a:
+            st.markdown("[🔗 LinkedIn Profile](https://www.linkedin.com/in/trichyravis/)")
+        with col_b:
+            st.markdown("[🐙 GitHub Profile](https://github.com/trichyravis)")
 
-st.markdown(footer_html, unsafe_allow_html=True)
+st.markdown("")
+st.markdown("---")
+st.markdown("")
+
+# Disclaimer section
+st.warning("⚠️ **DISCLAIMER**: This tool is for educational purposes only. **NOT financial advice**. Always consult with a qualified financial advisor before making investment decisions. Past performance does not guarantee future results. This tool does not include taxes, fees, or transaction costs.")
+
+st.markdown("")
+st.markdown("<p style='text-align: center; font-size: 11px; color: gray;'>© 2024 The Mountain Path - World of Finance. All rights reserved.</p>", unsafe_allow_html=True)
