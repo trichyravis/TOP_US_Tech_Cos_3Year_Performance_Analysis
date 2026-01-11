@@ -41,6 +41,20 @@ st.markdown("""
         background-color: #003366;
     }
     
+    [data-testid="stSidebar"] h3,
+    [data-testid="stSidebar"] h2,
+    [data-testid="stSidebar"] h4 {
+        color: #FFD700 !important;
+    }
+    
+    [data-testid="stSidebar"] p {
+        color: white !important;
+    }
+    
+    [data-testid="stSidebar"] label {
+        color: white !important;
+    }
+    
     .metric-card {
         background: linear-gradient(135deg, #003366 0%, #004d80 100%);
         color: white;
