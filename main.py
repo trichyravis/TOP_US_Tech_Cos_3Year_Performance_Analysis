@@ -112,6 +112,26 @@ with st.sidebar:
     if st.button("🔄 Refresh Data", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
+    
+    st.markdown("---")
+    st.markdown("### 📅 Data Period")
+    
+    time_period = st.radio(
+        "Select Time Period:",
+        ["1 Year", "2 Years", "3 Years"],
+        index=2,
+        key="time_period_selector"
+    )
+    
+    # Convert to yfinance format
+    period_map = {
+        "1 Year": "1y",
+        "2 Years": "2y",
+        "3 Years": "3y"
+    }
+    selected_period = period_map[time_period]
+    
+    st.info(f"📊 Analyzing {time_period} of data")
 
 # ============================================================================
 # MAIN TABS
@@ -237,7 +257,7 @@ with tab2:
         from financial_performance import FiveLensFramework
         
         # Fetch all company data
-        all_data = fetch_all_company_data()
+        all_data = fetch_all_company_data(period=selected_period)
         
         if not all_data:
             st.error("❌ Could not fetch financial data. Please try refreshing.")
@@ -450,7 +470,7 @@ with tab3:
     st.info("📊 Analyzing all 5 companies: NVDA, MSFT, AAPL, GOOGL, AMZN")
     
     try:
-        all_data = fetch_all_company_data()
+        all_data = fetch_all_company_data(period=selected_period)
         
         if not all_data:
             st.error("❌ Could not fetch price data")
@@ -630,7 +650,7 @@ with tab4:
     try:
         from risk_analyzer import RiskAnalyzer
         
-        all_data = fetch_all_company_data()
+        all_data = fetch_all_company_data(period=selected_period)
         
         if not all_data:
             st.error("❌ Could not fetch data for risk analysis")
@@ -929,7 +949,7 @@ with tab5:
     """)
     
     try:
-        all_data = fetch_all_company_data()
+        all_data = fetch_all_company_data(period=selected_period)
         
         if all_data:
             col1, col2, col3, col4, col5 = st.columns(5)
