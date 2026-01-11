@@ -11,7 +11,7 @@ from datetime import datetime
 import plotly.graph_objects as go
 import plotly.express as px
 
-from data_handler_new import (
+from data_handler import (
     DataFetcher, fetch_all_company_data, fetch_market_data, get_company_data
 )
 
