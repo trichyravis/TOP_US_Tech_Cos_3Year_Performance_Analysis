@@ -462,16 +462,16 @@ with tab2:
                     col1, col2, col3, col4 = st.columns(4)
                     
                     with col1:
-                        revenue = (info.get('totalRevenue', 0) or 0) / 1e9
+                        revenue = (company_info.get('totalRevenue', 0) or 0) / 1e9
                         st.metric("Revenue ($B)", f"${revenue:.1f}")
                     with col2:
-                        pe = info.get('trailingPE')
+                        pe = company_info.get('trailingPE')
                         st.metric("P/E Ratio", f"{pe:.1f}" if pe else "N/A")
                     with col3:
-                        pb = info.get('priceToBook')
+                        pb = company_info.get('priceToBook')
                         st.metric("P/B Ratio", f"{pb:.1f}" if pb else "N/A")
                     with col4:
-                        roe = info.get('returnOnEquity')
+                        roe = company_info.get('returnOnEquity')
                         if roe:
                             st.metric("ROE", f"{roe*100:.1f}%")
                         else:
@@ -561,12 +561,15 @@ with tab3:
                     
                     if price_data is not None and not price_data.empty:
                         # Handle MultiIndex columns from yfinance
-                        if isinstance(price_data.columns, pd.MultiIndex):
-                            price_data.columns = price_data.columns.get_level_values(1)
-                        
-                        # Ensure column names are correct
-                        cols = price_data.columns.str.lower()
-                        price_data.columns = cols
+                        try:
+                            if isinstance(price_data.columns, pd.MultiIndex):
+                                price_data.columns = price_data.columns.get_level_values(1)
+                            
+                            # Ensure column names are correct
+                            price_data.columns = price_data.columns.str.lower()
+                        except:
+                            # If column handling fails, try to reset columns
+                            price_data.columns = ['open', 'high', 'low', 'close', 'volume']
                         
                         # Ensure all required columns exist
                         required_cols = ['open', 'high', 'low', 'close']
@@ -590,7 +593,7 @@ with tab3:
                             
                             st.plotly_chart(fig, width="stretch")
                         else:
-                            st.warning(f"Missing required columns for {ticker}: {price_data.columns.tolist()}")
+                            st.warning(f"Missing required columns for {ticker}. Available columns: {list(price_data.columns)}")
                     else:
                         st.warning(f"Could not load price data for {ticker}")
             
@@ -601,23 +604,26 @@ with tab3:
             for ticker, data in all_data.items():
                 price_data = data.get('price_data')
                 if price_data is not None and not price_data.empty:
-                    # Handle MultiIndex columns
-                    if isinstance(price_data.columns, pd.MultiIndex):
-                        price_data.columns = price_data.columns.get_level_values(1)
-                    
-                    cols = price_data.columns.str.lower()
-                    price_data.columns = cols
-                    
-                    # Get close price
-                    if 'close' in price_data.columns:
-                        close_prices = price_data['close']
-                    elif 'adj close' in price_data.columns:
-                        close_prices = price_data['adj close']
-                    else:
-                        close_prices = price_data.iloc[:, -1]
-                    
-                    annual_return = DataFetcher.calculate_annual_return(close_prices)
-                    annual_returns[ticker] = annual_return * 100
+                    try:
+                        # Handle MultiIndex columns
+                        if isinstance(price_data.columns, pd.MultiIndex):
+                            price_data.columns = price_data.columns.get_level_values(1)
+                        
+                        # Convert to lowercase safely
+                        price_data.columns = price_data.columns.str.lower()
+                        
+                        # Get close price
+                        if 'close' in price_data.columns:
+                            close_prices = price_data['close']
+                        elif 'adj close' in price_data.columns:
+                            close_prices = price_data['adj close']
+                        else:
+                            close_prices = price_data.iloc[:, -1]
+                        
+                        annual_return = DataFetcher.calculate_annual_return(close_prices)
+                        annual_returns[ticker] = annual_return * 100
+                    except:
+                        annual_returns[ticker] = 0.0  # Default if calculation fails
             
             if annual_returns:
                 fig = go.Figure()
